@@ -1,0 +1,117 @@
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { Property } from './schemas/property.schema';
+import { CreatePropertyDto } from './dto/create-property.dto';
+import { UpdatePropertyDto } from './dto/update-property.dto';
+import { PaginationDto } from '../../common/dto/pagination.dto';
+
+@Injectable()
+export class PropertyService {
+    constructor(
+        @InjectModel(Property.name) private propertyModel: Model<Property>,
+    ) { }
+
+    async create(createPropertyDto: CreatePropertyDto): Promise<Property> {
+        const createdProperty = new this.propertyModel(createPropertyDto);
+        return createdProperty.save();
+    }
+
+    async findAll(
+        paginationDto: PaginationDto,
+        filters: { propertyType?: string; city?: string; sort?: string },
+    ): Promise<{ data: Property[]; total: number; page: number; limit: number }> {
+        // Convert page and limit to numbers and provide defaults
+        const page = Number(paginationDto.page) || 1;
+        const limit = Number(paginationDto.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        // Build query
+        const query: Record<string, any> = {};
+
+        if (filters.propertyType) {
+            query.property_type = filters.propertyType;
+        }
+
+        if (filters.city) {
+            query['address.city'] = { $regex: new RegExp(filters.city, 'i') };
+        }
+
+        // Build sort
+        let sortOptions: Record<string, 1 | -1> = {};
+        if (filters.sort) {
+            const [field, order] = filters.sort.split(':');
+            sortOptions[field] = order === 'desc' ? -1 : 1;
+        } else {
+            sortOptions = { created_at: -1 };
+        }
+
+        const data = await this.propertyModel
+            .find(query)
+            .sort(sortOptions)
+            .skip(skip)
+            .limit(limit)
+            .exec();
+
+        const total = await this.propertyModel.countDocuments(query).exec();
+
+        return {
+            data,
+            total,
+            page,
+            limit,
+        };
+    }
+
+
+    async findOne(id: string, include?: string): Promise<Property> {
+        let query = this.propertyModel.findById(id);
+
+        if (include) {
+            const includes = include.split(',');
+            if (includes.includes('ical_connections')) {
+                // Note: In a real implementation, you would populate related collections
+                // This is a placeholder for the concept
+                // query = query.populate('icalConnections');
+            }
+        }
+
+        const property = await query.exec();
+
+        if (!property) {
+            throw new NotFoundException(`Property with ID ${id} not found`);
+        }
+
+        return property;
+    }
+
+    async update(id: string, updatePropertyDto: UpdatePropertyDto): Promise<Property> {
+        const updatedProperty = await this.propertyModel
+            .findByIdAndUpdate(id, updatePropertyDto, { new: true })
+            .exec();
+
+        if (!updatedProperty) {
+            throw new NotFoundException(`Property with ID ${id} not found`);
+        }
+
+        return updatedProperty;
+    }
+
+    async remove(id: string, preserveHistory = false): Promise<void> {
+        const property = await this.propertyModel.findById(id).exec();
+
+        if (!property) {
+            throw new NotFoundException(`Property with ID ${id} not found`);
+        }
+
+        if (preserveHistory) {
+            // In a real implementation, you might mark the property as inactive
+            // instead of deleting it, or move it to an archive collection
+            await this.propertyModel
+                .findByIdAndUpdate(id, { active: false })
+                .exec();
+        } else {
+            await this.propertyModel.findByIdAndDelete(id).exec();
+        }
+    }
+}
