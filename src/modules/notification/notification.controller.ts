@@ -1,8 +1,9 @@
 import { Controller, Get, Put, Body, Query, Param, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 import { NotificationService } from './notification.service';
 import { NotificationQueryDto } from './dto/notification-query.dto';
 import { UpdateNotificationSettingsDto } from './dto/update-notification-settings.dto';
+import { MarkNotificationReadDto } from './dto/mark-notification-read.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('Notifications')
@@ -19,9 +20,17 @@ export class NotificationController {
   }
 
   @Put('read')
-  @ApiOperation({ summary: 'Mark notifications as read' })
-  async markAsRead(@Body() body: { ids: string[] }) {
-    return this.notificationService.markAsRead(body.ids);
+  @ApiOperation({ summary: 'Mark all or specific notifications as read' })
+  async markAsRead(@Body() body?: { ids?: string[] }) {
+    // If no body is provided or ids is not provided, mark all unread notifications as read
+    return this.notificationService.markAsRead(body?.ids);
+  }
+
+  @Put(':id/read')
+  @ApiOperation({ summary: 'Mark a single notification as read by its ID' })
+  @ApiParam({ name: 'id', description: 'Notification ID' })
+  async markOneAsRead(@Param('id') id: string) {
+    return this.notificationService.markOneAsRead(id);
   }
 
   @Get('settings')

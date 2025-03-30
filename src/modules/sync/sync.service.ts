@@ -7,7 +7,7 @@ import { CalendarEvent } from '../calendar/schemas/calendar-event.schema';
 import { IcalService } from '../ical/ical.service';
 import { ConflictDetectorService } from '../calendar/conflict-detector.service';
 import { NotificationService } from '../notification/notification.service';
-import { ConnectionStatus, NotificationType, NotificationSeverity, EventStatus } from '../../common/types';
+import { ConnectionStatus, NotificationType, NotificationSeverity, EventStatus, EventType } from '../../common/types';
 import { SyncResult, PropertySyncResult, CalendarEventData } from './types';
 
 @Injectable()
@@ -160,12 +160,12 @@ export class SyncService {
         const allConnections = await this.icalConnectionModel.find().exec();
 
         const totalConnections = allConnections.length;
-        const activeConnections = allConnections.filter(c => c.status === ConnectionStatus.ACTIVE).length;
-        const errorConnections = allConnections.filter(c => c.status === ConnectionStatus.ERROR).length;
+        const activeConnections = allConnections.filter(c => c.status?.match(new RegExp(ConnectionStatus.ACTIVE, 'i'))).length;
+        const errorConnections = allConnections.filter(c => c.status?.match(new RegExp(ConnectionStatus.ERROR, 'i'))).length;
 
         const propertiesWithConnections = await this.icalConnectionModel.distinct('property_id').exec();
         const propertiesWithErrors = await this.icalConnectionModel
-            .distinct('property_id', { status: ConnectionStatus.ERROR })
+            .distinct('property_id', { status: { $regex: new RegExp(ConnectionStatus.ERROR, 'i') } })
             .exec();
 
         return {
@@ -219,7 +219,7 @@ export class SyncService {
                         existingEvent.summary !== eventData.summary ||
                         existingEvent.start_date.getTime() !== eventData.start_date.getTime() ||
                         existingEvent.end_date.getTime() !== eventData.end_date.getTime() ||
-                        existingEvent.status !== eventData.status;
+                        existingEvent.status?.toUpperCase() !== eventData.status?.toUpperCase();
 
                     if (hasChanged) {
                         eventsToUpdate.push({
@@ -239,7 +239,7 @@ export class SyncService {
             // Find events to mark as cancelled (they exist in our DB but not in the feed anymore)
             const eventsToCancel: Types.ObjectId[] = [];
             existingEvents.forEach(event => {
-                if (!processedUids.has(event.ical_uid) && event.status !== EventStatus.CANCELLED) {
+                if (!processedUids.has(event.ical_uid) && !event.status?.match(new RegExp(EventStatus.CANCELLED, 'i'))) {
                     eventsToCancel.push(event._id as Types.ObjectId);
                 }
             });
@@ -250,7 +250,7 @@ export class SyncService {
 
                 // Create notifications for new bookings
                 for (const event of eventsToCreate) {
-                    if (event.event_type === 'booking') {
+                    if (event.event_type?.toUpperCase() === EventType.BOOKING.toUpperCase()) {
                         await this.notificationService.createNotification({
                             property_id: connection.property_id.toString(), // Convert ObjectId to string
                             type: NotificationType.NEW_BOOKING,
@@ -333,7 +333,7 @@ export class SyncService {
 
     private getNextSyncDate(connections: ICalConnection[]): Date | null {
         const nextSyncDates = connections
-            .filter(c => c.last_synced && c.status === ConnectionStatus.ACTIVE)
+            .filter(c => c.last_synced && c.status?.toUpperCase() === ConnectionStatus.ACTIVE.toUpperCase())
             .map(c => {
                 const nextSync = new Date(c.last_synced);
                 nextSync.setMinutes(nextSync.getMinutes() + c.sync_frequency);
@@ -348,7 +348,7 @@ export class SyncService {
     private getOverallStatus(connections: ICalConnection[]): string {
         if (connections.length === 0) return 'no_connections';
 
-        const hasErrors = connections.some(c => c.status === ConnectionStatus.ERROR);
+        const hasErrors = connections.some(c => c.status?.match(new RegExp(ConnectionStatus.ERROR, 'i')));
         if (hasErrors) return 'error';
 
         return 'healthy';

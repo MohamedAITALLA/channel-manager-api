@@ -80,16 +80,17 @@ export class IcalService {
 
   private determineEventType(event: ical.VEvent, platform: Platform): EventType {
     // Platform-specific logic to determine event type
-    switch (platform) {
-      case Platform.AIRBNB:
+    const platformUpper = platform?.toUpperCase();
+    switch (platformUpper) {
+      case Platform.AIRBNB.toUpperCase():
         if (event.summary?.includes('CONFIRMED')) {
           return EventType.BOOKING;
         } else if (event.summary?.includes('UNAVAILABLE')) {
           return EventType.BLOCKED;
         }
         break;
-      case Platform.BOOKING:
-        if (event.summary?.includes('Booking.com')) {
+      case Platform.BOOKING.toUpperCase():
+        if (event.summary?.includes('Booking')) {
           return EventType.BOOKING;
         }
         break;
@@ -162,12 +163,13 @@ export class IcalService {
   }
 
   private getEventTypeLabel(eventType: EventType): string {
-    switch (eventType) {
-      case EventType.BOOKING:
+    const eventTypeUpper = eventType?.toUpperCase();
+    switch (eventTypeUpper) {
+      case EventType.BOOKING.toUpperCase():
         return 'Booked';
-      case EventType.BLOCKED:
+      case EventType.BLOCKED.toUpperCase():
         return 'Not available';
-      case EventType.MAINTENANCE:
+      case EventType.MAINTENANCE.toUpperCase():
         return 'Maintenance';
       default:
         return 'Not available';

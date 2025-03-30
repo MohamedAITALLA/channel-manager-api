@@ -1,6 +1,6 @@
 # Multi-Platform Property Management API
 
-A RESTful API that integrates with multiple booking platforms (Airbnb, Booking.com, Expedia, TripAdvisor, Vrbo) exclusively via publicly available iCalendar URLs, using standardized attributes common across all platforms for consistent property management.
+A RESTful API that integrates with multiple booking platforms (Airbnb, Booking, Expedia, TripAdvisor, Vrbo) exclusively via publicly available iCalendar URLs, using standardized attributes common across all platforms for consistent property management.
 
 ## Features
 

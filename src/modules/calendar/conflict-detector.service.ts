@@ -14,7 +14,7 @@ export class ConflictDetectorService {
 
   async detectConflictsForEvent(event: CalendarEvent): Promise<Conflict[]> {
     // Skip conflict detection for cancelled events
-    if (event.status === EventStatus.CANCELLED) {
+    if (event.status?.toLowerCase() === EventStatus.CANCELLED.toLowerCase()) {
       return [];
     }
     
@@ -22,7 +22,7 @@ export class ConflictDetectorService {
     const overlappingEvents = await this.calendarEventModel.find({
       property_id: event.property_id,
       _id: { $ne: event._id }, // Exclude the current event
-      status: EventStatus.CONFIRMED,
+      status: { $regex: new RegExp(EventStatus.CONFIRMED, 'i') }, // Case-insensitive match
       $or: [
         { start_date: { $lt: event.end_date }, end_date: { $gt: event.start_date } },
       ],
@@ -51,7 +51,7 @@ export class ConflictDetectorService {
     // Get all active events for the property
     const events = await this.calendarEventModel.find({
       property_id: propertyId,
-      status: EventStatus.CONFIRMED,
+      status: { $regex: new RegExp(EventStatus.CONFIRMED, 'i') }, // Case-insensitive match
     }).exec();
     
     // Clear existing conflicts for this property

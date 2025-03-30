@@ -62,7 +62,7 @@ export class CalendarService {
     // Check for overlapping events
     const overlappingEvents = await this.calendarEventModel.find({
       property_id: propertyId,
-      status: EventStatus.CONFIRMED,
+      status: { $regex: new RegExp(EventStatus.CONFIRMED, 'i') }, // Case-insensitive match
       $or: [
         { start_date: { $lt: endDate }, end_date: { $gt: startDate } },
       ],

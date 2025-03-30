@@ -71,7 +71,21 @@ export class NotificationService {
   }
   
 
-  async markAsRead(ids: string[]): Promise<{ success: boolean; count: number }> {
+  async markAsRead(ids?: string[]): Promise<{ success: boolean; count: number }> {
+    // If no IDs are provided, mark all unread notifications as read
+    if (!ids || ids.length === 0) {
+      const result = await this.notificationModel.updateMany(
+        { read: false },
+        { read: true }
+      ).exec();
+      
+      return {
+        success: true,
+        count: result.modifiedCount,
+      };
+    }
+    
+    // Otherwise, mark only the specified notifications as read
     const result = await this.notificationModel.updateMany(
       { _id: { $in: ids } },
       { read: true }
@@ -80,6 +94,25 @@ export class NotificationService {
     return {
       success: true,
       count: result.modifiedCount,
+    };
+  }
+
+  async markOneAsRead(id: string): Promise<{ success: boolean; message: string }> {
+    const notification = await this.notificationModel.findById(id).exec();
+    
+    if (!notification) {
+      return {
+        success: false,
+        message: 'Notification not found',
+      };
+    }
+    
+    notification.read = true;
+    await notification.save();
+    
+    return {
+      success: true,
+      message: 'Notification marked as read',
     };
   }
 
