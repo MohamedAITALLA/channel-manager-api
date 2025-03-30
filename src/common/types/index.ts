@@ -53,7 +53,7 @@ export enum PropertyType {
   
   export enum Platform {
     AIRBNB = 'Airbnb',
-    BOOKING = 'Booking.com',
+    BOOKING = 'Booking',
     EXPEDIA = 'Expedia',
     TRIPADVISOR = 'TripAdvisor',
     VRBO = 'Vrbo',

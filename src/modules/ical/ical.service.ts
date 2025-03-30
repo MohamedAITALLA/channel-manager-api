@@ -6,22 +6,22 @@ import { Platform, EventType } from '../../common/types';
 
 @Injectable()
 export class IcalService {
-  constructor(private readonly httpService: HttpService) {}
+  constructor(private readonly httpService: HttpService) { }
 
   async validateICalUrl(url: string): Promise<boolean> {
     try {
       const response = await firstValueFrom(
         this.httpService.get(url, { responseType: 'text' })
       );
-      
+
       // Try to parse the iCal data
       const events = await ical.async.parseICS(response.data);
-      
+
       // Check if there are any events in the feed
       if (Object.keys(events).length === 0) {
         throw new Error('iCal feed contains no events');
       }
-      
+
       return true;
     } catch (error) {
       if (error.response) {
@@ -42,7 +42,7 @@ export class IcalService {
       const response = await firstValueFrom(
         this.httpService.get(url, { responseType: 'text' })
       );
-      
+
       const events = await ical.async.parseICS(response.data);
       return this.normalizeICalEvents(events, platform);
     } catch (error) {
@@ -56,13 +56,13 @@ export class IcalService {
   private normalizeICalEvents(events: any, platform: Platform): any[] {
     // Explicitly type the array to avoid 'never[]' inference
     const normalizedEvents: any[] = [];
-    
+
     // Properly type the entries from Object.entries
     for (const [uid, event] of Object.entries(events) as [string, any][]) {
       if (event.type !== 'VEVENT') continue;
-      
+
       const eventData = event as ical.VEvent;
-      
+
       normalizedEvents.push({
         ical_uid: uid,
         summary: eventData.summary,
@@ -74,10 +74,9 @@ export class IcalService {
         platform,
       });
     }
-    
+
     return normalizedEvents;
   }
-  
 
   private determineEventType(event: ical.VEvent, platform: Platform): EventType {
     // Platform-specific logic to determine event type
@@ -96,19 +95,82 @@ export class IcalService {
         break;
       // Add cases for other platforms
     }
-    
+
     // Default determination based on common patterns
-    if (event.summary?.toLowerCase().includes('booking') || 
-        event.summary?.toLowerCase().includes('reservation')) {
+    if (event.summary?.toLowerCase().includes('booking') ||
+      event.summary?.toLowerCase().includes('reservation')) {
       return EventType.BOOKING;
-    } else if (event.summary?.toLowerCase().includes('blocked') || 
-               event.summary?.toLowerCase().includes('unavailable')) {
+    } else if (event.summary?.toLowerCase().includes('blocked') ||
+      event.summary?.toLowerCase().includes('unavailable')) {
       return EventType.BLOCKED;
     } else if (event.summary?.toLowerCase().includes('maintenance')) {
       return EventType.MAINTENANCE;
     }
-    
+
     // Default to booking if we can't determine
     return EventType.BOOKING;
+  }
+
+  generateIcalContent(events: any[], propertyId: string): string {
+    // Start the iCal content
+    let icalContent = [
+      'BEGIN:VCALENDAR',
+      'PRODID:-//Channel Manager//Property Calendar 1.0//EN',
+      'CALSCALE:GREGORIAN',
+      'VERSION:2.0',
+    ];
+
+    // Add each event
+    for (const event of events) {
+      // Format dates in iCal format (YYYYMMDD)
+      const startDate = this.formatDateForIcal(event.start_date);
+      const endDate = this.formatDateForIcal(event.end_date);
+
+      // Create a unique ID for the event
+      const uid = `${event._id}@channel-manager.com`;
+
+      // Determine summary based on platform and event type
+      let summary = `${event.platform} (${this.getEventTypeLabel(event.event_type)})`;
+
+      // Add the event to the iCal content
+      icalContent = [
+        ...icalContent,
+        'BEGIN:VEVENT',
+        `DTSTAMP:${this.formatDateTimeForIcal(new Date())}`,
+        `DTSTART;VALUE=DATE:${startDate}`,
+        `DTEND;VALUE=DATE:${endDate}`,
+        `SUMMARY:${summary}`,
+        `UID:${uid}`,
+        'END:VEVENT',
+      ];
+    }
+
+    // End the iCal content
+    icalContent.push('END:VCALENDAR');
+
+    // Join all lines with CRLF as per iCal spec
+    return icalContent.join('\r\n');
+  }
+
+  private formatDateForIcal(date: Date): string {
+    const d = new Date(date);
+    return d.toISOString().replace(/[-:]/g, '').split('T')[0];
+  }
+
+  private formatDateTimeForIcal(date: Date): string {
+    return date.toISOString().replace(/[-:]/g, '').replace(/\..+/g, 'Z');
+  }
+
+  private getEventTypeLabel(eventType: EventType): string {
+    switch (eventType) {
+      case EventType.BOOKING:
+        return 'Booked';
+      case EventType.BLOCKED:
+        return 'Not available';
+      case EventType.MAINTENANCE:
+        return 'Maintenance';
+      default:
+        return 'Not available';
+    }
   }
 }
