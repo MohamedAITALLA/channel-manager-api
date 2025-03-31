@@ -1,5 +1,5 @@
-import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { Controller, Get, Post, Body, Param, Query, UseGuards, Delete } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { CalendarService } from './calendar.service';
 import { CalendarQueryDto } from './dto/calendar-query.dto';
 import { CreateEventDto } from './dto/create-event.dto';
@@ -47,7 +47,6 @@ export class EventsController {
   ) {
     return this.calendarService.getEvents(propertyId, query);
   }
-
   @Post()
   @ApiOperation({ summary: 'Create a manual event (e.g., maintenance, blocking)' })
   async createEvent(
@@ -55,6 +54,17 @@ export class EventsController {
     @Body() createEventDto: CreateEventDto,
   ) {
     return this.calendarService.createManualEvent(propertyId, createEventDto);
+  }
+
+  @Delete(':eventId')
+  @ApiOperation({ summary: 'Remove a calender event' })
+  @ApiQuery({ name: 'preserve_history', required: false, type: Boolean })
+  async remove(
+    @Param('propertyId') propertyId: string,
+    @Param('eventId') eventId: string,
+    @Query('preserve_history') preserveHistory?: boolean
+  ) {
+    return this.calendarService.removeCalenderEevent(eventId,propertyId,preserveHistory);
   }
 }
 
@@ -72,5 +82,16 @@ export class ConflictsController {
     @Query('status') status?: string,
   ) {
     return this.calendarService.getConflicts(propertyId, status);
+  }
+
+  @Delete(':conflictId')
+  @ApiOperation({ summary: 'Remove a conflict' })
+  @ApiQuery({ name: 'preserve_history', required: false, type: Boolean })
+  async remove(
+    @Param('propertyId') propertyId: string,
+    @Param('conflictId') conflictId: string,
+    @Query('preserve_history') preserveHistory?: boolean
+  ) {
+    return this.calendarService.removeConflict(conflictId,propertyId,preserveHistory);
   }
 }

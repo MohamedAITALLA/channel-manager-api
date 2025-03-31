@@ -27,6 +27,10 @@ export class Conflict extends Document {
 
   @Prop()
   description: string;
+
+  
+  @Prop({ default: true })
+  is_active: boolean;
 }
 
 export const ConflictSchema = SchemaFactory.createForClass(Conflict);

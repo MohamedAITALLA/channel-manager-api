@@ -31,7 +31,7 @@ export class PropertyService {
         const skip = (page - 1) * limit;
 
         // Build query
-        const query: Record<string, any> = { user_id: userId };
+        const query: Record<string, any> = { user_id: userId, is_active: true };
 
         if (filters.propertyType) {
             query.property_type = filters.propertyType;
@@ -105,21 +105,22 @@ export class PropertyService {
         return updatedProperty;
     }
 
-    async remove(id: string, userId: string, preserveHistory = false): Promise<void> {
-        const property = await this.propertyModel.findOne({ _id: id, user_id: userId }).exec();
-
-        if (!property) {
-            throw new NotFoundException(`Property with ID ${id} not found`);
-        }
-
+    async remove(id: string, userId: string, preserveHistory = false): Promise<Property> {
         if (preserveHistory) {
-            // In a real implementation, you might mark the property as inactive
-            // instead of deleting it, or move it to an archive collection
-            await this.propertyModel
-                .findByIdAndUpdate(id, { active: false })
+            const property = await this.propertyModel
+                .findOneAndUpdate({ _id: id, user_id: userId }, { is_active: false }, { new: true })
                 .exec();
+
+            if (!property) {
+                throw new NotFoundException(`Property with ID ${id} not found`);
+            }
+            return property;
         } else {
-            await this.propertyModel.findByIdAndDelete(id).exec();
+            const property = await this.propertyModel.findOneAndDelete({ _id: id, user_id: userId }).exec();
+            if (!property) {
+                throw new NotFoundException(`Property with ID ${id} not found`);
+            }
+            return property;
         }
     }
 }

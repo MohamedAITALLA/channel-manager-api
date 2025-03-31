@@ -144,4 +144,55 @@ export class CalendarService {
     
     return conflicts;
   }
+
+  async removeCalenderEevent(eventId: string, propertyId:string, preserve_history: boolean = false): Promise<CalendarEvent> {
+    if (preserve_history) {
+      const event = await this.calendarEventModel
+        .findOneAndUpdate(
+          { _id: eventId, property_id: propertyId },
+          { is_active: false },
+          { new: true }
+        )
+        .exec();
+      
+      if (!event) {
+        throw new NotFoundException(`Calendar event with ID ${eventId} not found`);
+      }
+      return event;
+    } else {
+      const event = await this.calendarEventModel
+        .findOneAndDelete({ id: eventId, property_id: propertyId})
+        .exec();
+      
+      if (!event) {
+        throw new NotFoundException(`Calendar event with ID ${eventId} not found`);
+      }
+      return event;
+    }
+  }
+  async removeConflict(conflictId: string, propertyId:string, preserve_history: boolean = false): Promise<Conflict> {
+    if (preserve_history) {
+      const event = await this.conflictModel
+        .findOneAndUpdate(
+          { _id: conflictId, property_id: propertyId},
+          { is_active: false },
+          { new: true }
+        )
+        .exec();
+      
+      if (!event) {
+        throw new NotFoundException(`Confilct with ID ${conflictId} not found`);
+      }
+      return event;
+    } else {
+      const event = await this.conflictModel
+        .findOneAndDelete({ id: conflictId, property_id: propertyId})
+        .exec();
+      
+      if (!event) {
+        throw new NotFoundException(`Confilct with ID ${conflictId} not found`);
+      }
+      return event;
+    }
+  }
 }

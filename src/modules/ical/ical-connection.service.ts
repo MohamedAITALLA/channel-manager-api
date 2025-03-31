@@ -95,17 +95,29 @@ export class ICalConnectionService {
 
     return updatedConnection;
   }
-
-  async remove(propertyId: string, connectionId: string): Promise<void> {
-    const result = await this.icalConnectionModel
-      .deleteOne({
-        _id: connectionId,
-        property_id: propertyId,
-      })
-      .exec();
-
-    if (result.deletedCount === 0) {
-      throw new NotFoundException(`iCal connection with ID ${connectionId} not found`);
+  async remove(propertyId: string, connectionId: string, preserve_history: boolean = false): Promise<ICalConnection> {
+    if (preserve_history) {
+      const connection = await this.icalConnectionModel
+        .findOneAndUpdate(
+          { _id: connectionId,property_id:propertyId},
+          { is_active: false },
+          { new: true }
+        )
+        .exec();
+      
+      if (!connection) {
+        throw new NotFoundException(`iCal connection with ID ${connectionId} not found`);
+      }
+      return connection;
+    } else {
+      const connection = await this.icalConnectionModel
+        .findOneAndDelete({ _id: connectionId,property_id:propertyId})
+        .exec();
+      
+      if (!connection) {
+        throw new NotFoundException(`iCal connection with ID ${connectionId} not found`);
+      }
+      return connection;
     }
   }
 
@@ -148,4 +160,6 @@ export class ICalConnectionService {
       };
     }
   }
+
+  
 }

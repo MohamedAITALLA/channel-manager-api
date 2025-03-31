@@ -1,5 +1,5 @@
-import { Controller, Get, Put, Body, Query, Param, UseGuards, Req } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
+import { Controller, Get, Put, Body, Query, Param, UseGuards, Req, Delete } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { NotificationService } from './notification.service';
 import { NotificationQueryDto } from './dto/notification-query.dto';
 import { UpdateNotificationSettingsDto } from './dto/update-notification-settings.dto';
@@ -34,6 +34,14 @@ export class NotificationController {
   async markOneAsRead(@Req() req: any, @Param('id') id: string) {
     const userId = req.user.userId;
     return this.notificationService.markOneAsRead(id, userId);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Remove a notification by its ID' })
+  @ApiQuery({ name: 'preserve_history', required: false, type: Boolean })
+  async remove(@Req() req: any, @Param('id') id: string, @Query('preserve_history') preserveHistory?: boolean) {
+    const userId = req.user.userId;
+    return this.notificationService.remove(id, userId, preserveHistory);
   }
 
   @Get('settings')

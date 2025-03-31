@@ -7,8 +7,9 @@ import {
     Put,
     Delete,
     UseGuards,
+    Query,
   } from '@nestjs/common';
-  import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+  import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
   import { ICalConnectionService } from './ical-connection.service';
   import { CreateICalConnectionDto } from './dto/create-ical-connection.dto';
   import { UpdateICalConnectionDto } from './dto/update-ical-connection.dto';
@@ -61,11 +62,13 @@ import {
   
     @Delete(':connectionId')
     @ApiOperation({ summary: 'Remove an iCal connection' })
+    @ApiQuery({ name: 'preserve_history', required: false, type: Boolean })
     async remove(
       @Param('propertyId') propertyId: string,
       @Param('connectionId') connectionId: string,
+      @Query('preserve_history') preserveHistory?: boolean
     ) {
-      return this.icalConnectionService.remove(propertyId, connectionId);
+      return this.icalConnectionService.remove(propertyId,connectionId,preserveHistory);
     }
   
     @Post(':connectionId/test')

@@ -27,6 +27,10 @@ export class ICalConnection extends Document {
 
   @Prop()
   error_message: string;
+
+  
+  @Prop({ default: true })
+  is_active: boolean;
 }
 
 export const ICalConnectionSchema = SchemaFactory.createForClass(ICalConnection);

@@ -33,6 +33,9 @@ export class CalendarEvent extends Document {
 
   @Prop()
   description: string;
+
+  @Prop({ default: true })
+  is_active: boolean;
 }
 
 export const CalendarEventSchema = SchemaFactory.createForClass(CalendarEvent);

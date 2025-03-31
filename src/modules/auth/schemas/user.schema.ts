@@ -1,5 +1,6 @@
+// src/modules/auth/schemas/user.schema.ts
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Document, Schema as MongooseSchema } from 'mongoose';
 
 @Schema({ timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } })
 export class User extends Document {
@@ -20,6 +21,9 @@ export class User extends Document {
 
   @Prop({ default: true })
   is_active: boolean;
+  
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User', default: null })
+  created_by: string;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

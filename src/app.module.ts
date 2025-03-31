@@ -9,9 +9,11 @@ import { CalendarModule } from './modules/calendar/calendar.module';
 import { SyncModule } from './modules/sync/sync.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { UserProfileModule } from './modules/user-profile/user-profile.module';
 
 @Module({
   imports: [
+    UserProfileModule,
     ConfigModule.forRoot({
       isGlobal: true,
     }),

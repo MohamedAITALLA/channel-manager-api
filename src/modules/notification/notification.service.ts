@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Notification } from './schemas/notification.schema';
@@ -8,6 +8,7 @@ import { UpdateNotificationSettingsDto } from './dto/update-notification-setting
 
 @Injectable()
 export class NotificationService {
+
   private settings = {
     email_notifications: true,
     new_booking_notifications: true,
@@ -35,7 +36,7 @@ export class NotificationService {
     const skip = (pageNum - 1) * limitNum;
     
     // Build filter
-    const filter: Record<string, any> = { user_id: userId };
+    const filter: Record<string, any> = { user_id: userId, isFinite: true };
     
     if (property_id) {
       filter.property_id = property_id;
@@ -132,5 +133,24 @@ export class NotificationService {
     };
     
     return this.settings;
+  }
+
+  async remove(id: string, userId: any, preserveHistory: boolean= false): Promise<Notification> {
+    if (preserveHistory) {
+      const notification = await this.notificationModel
+          .findOneAndUpdate({ _id: id, user_id: userId }, { is_active: false }, { new: true })
+          .exec();
+
+      if (!notification) {
+          throw new NotFoundException(`Notification with ID ${id} not found`);
+      }
+      return notification;
+  } else {
+      const notification = await this.notificationModel.findOneAndDelete({ _id: id, user_id: userId }).exec();
+      if (!notification) {
+          throw new NotFoundException(`Notification with ID ${id} not found`);
+      }
+      return notification;
+  }
   }
 }
