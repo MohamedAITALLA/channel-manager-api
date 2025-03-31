@@ -6,6 +6,9 @@ export class CreateNotificationDto {
   @IsMongoId()
   property_id?: string;
 
+  @IsMongoId()
+  user_id: string;
+
   @IsEnum(NotificationType)
   type: NotificationType;
 

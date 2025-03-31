@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Param, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Param, UseGuards, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 import { SyncService } from './sync.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -14,14 +14,16 @@ export class SyncController {
   @Post()
   @ApiOperation({ summary: 'Trigger manual synchronization of all properties' })
   @ApiResponse({ status: 200, description: 'Synchronization successful' })
-  async syncAll(): Promise<{ success: boolean; message: string; results: SyncResult[] }> {
-    return this.syncService.syncAllProperties();
+  async syncAll(@Req() req: any): Promise<{ success: boolean; message: string; results: SyncResult[] }> {
+    const userId = req.user.userId;
+    return this.syncService.syncAllProperties(userId);
   }
 
   @Get('status')
   @ApiOperation({ summary: 'Get overall synchronization health status' })
-  async getSyncStatus() {
-    return this.syncService.getSyncHealthStatus();
+  async getSyncStatus(@Req() req: any) {
+    const userId = req.user.userId;
+    return this.syncService.getSyncHealthStatus(userId);
   }
 }
 
@@ -34,13 +36,15 @@ export class PropertySyncController {
 
   @Post()
   @ApiOperation({ summary: 'Trigger synchronization for a specific property' })
-  async syncProperty(@Param('propertyId') propertyId: string): Promise<{ success: boolean; message: string; results: PropertySyncResult[] }> {
-    return this.syncService.syncProperty(propertyId);
+  async syncProperty(@Req() req: any, @Param('propertyId') propertyId: string): Promise<{ success: boolean; message: string; results: PropertySyncResult[] }> {
+    const userId = req.user.userId;
+    return this.syncService.syncProperty(propertyId, userId);
   }
 
   @Get()
   @ApiOperation({ summary: 'Check synchronization status and last sync time' })
-  async getPropertySyncStatus(@Param('propertyId') propertyId: string) {
-    return this.syncService.getPropertySyncStatus(propertyId);
+  async getPropertySyncStatus(@Req() req: any, @Param('propertyId') propertyId: string) {
+    const userId = req.user.userId;
+    return this.syncService.getPropertySyncStatus(propertyId, userId);
   }
 }

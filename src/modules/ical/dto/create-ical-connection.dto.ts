@@ -1,11 +1,15 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEnum, IsUrl, IsOptional, IsInt, Min } from 'class-validator';
+import { IsEnum, IsUrl, IsOptional, IsInt, Min, IsMongoId } from 'class-validator';
 import { Platform } from '../../../common/types';
 
 export class CreateICalConnectionDto {
   @ApiProperty({ enum: Platform })
   @IsEnum(Platform)
   platform: Platform;
+
+  @ApiProperty()
+  @IsMongoId()
+  user_id: string;
 
   @ApiProperty()
   @IsUrl()

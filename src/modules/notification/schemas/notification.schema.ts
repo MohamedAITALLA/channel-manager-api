@@ -7,6 +7,9 @@ export class Notification extends Document {
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Property' })
   property_id: MongooseSchema.Types.ObjectId;
 
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User', required: true })
+  user_id: MongooseSchema.Types.ObjectId;
+
   @Prop({ required: true, enum: Object.values(NotificationType) })
   type: NotificationType;
 
@@ -28,3 +31,4 @@ export const NotificationSchema = SchemaFactory.createForClass(Notification);
 // Create index for efficient queries
 NotificationSchema.index({ read: 1, created_at: -1 });
 NotificationSchema.index({ property_id: 1, created_at: -1 });
+NotificationSchema.index({ user_id: 1, created_at: -1 });

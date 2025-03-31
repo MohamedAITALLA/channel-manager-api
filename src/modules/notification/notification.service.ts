@@ -26,7 +26,7 @@ export class NotificationService {
     return newNotification.save();
   }
 
-  async findAll(query: NotificationQueryDto): Promise<{ data: Notification[]; total: number; page: number; limit: number }> {
+  async findAll(query: NotificationQueryDto, userId: string): Promise<{ data: Notification[]; total: number; page: number; limit: number }> {
     const { page = 1, limit = 10, property_id, type, severity, read } = query;
     
     // Ensure page and limit are numbers and have sensible defaults
@@ -35,7 +35,7 @@ export class NotificationService {
     const skip = (pageNum - 1) * limitNum;
     
     // Build filter
-    const filter: Record<string, any> = {};
+    const filter: Record<string, any> = { user_id: userId };
     
     if (property_id) {
       filter.property_id = property_id;
@@ -71,11 +71,11 @@ export class NotificationService {
   }
   
 
-  async markAsRead(ids?: string[]): Promise<{ success: boolean; count: number }> {
+  async markAsRead(ids?: string[], userId?: string): Promise<{ success: boolean; count: number }> {
     // If no IDs are provided, mark all unread notifications as read
     if (!ids || ids.length === 0) {
       const result = await this.notificationModel.updateMany(
-        { read: false },
+        { read: false, user_id: userId },
         { read: true }
       ).exec();
       
@@ -87,7 +87,7 @@ export class NotificationService {
     
     // Otherwise, mark only the specified notifications as read
     const result = await this.notificationModel.updateMany(
-      { _id: { $in: ids } },
+      { _id: { $in: ids }, user_id: userId },
       { read: true }
     ).exec();
     
@@ -97,8 +97,12 @@ export class NotificationService {
     };
   }
 
-  async markOneAsRead(id: string): Promise<{ success: boolean; message: string }> {
-    const notification = await this.notificationModel.findById(id).exec();
+  async markOneAsRead(id: string, userId: string): Promise<{ success: boolean; message: string }> {
+    const notification = await this.notificationModel.findOneAndUpdate(
+      { _id: id, user_id: userId },
+      { read: true },
+      { new: true }
+    ).exec();
     
     if (!notification) {
       return {
@@ -107,22 +111,19 @@ export class NotificationService {
       };
     }
     
-    notification.read = true;
-    await notification.save();
-    
     return {
       success: true,
       message: 'Notification marked as read',
     };
   }
 
-  async getSettings(): Promise<any> {
+  async getSettings(userId: string): Promise<any> {
     // In a real application, these settings would be stored in the database
     // and associated with the current user
     return this.settings;
   }
 
-  async updateSettings(updateSettingsDto: UpdateNotificationSettingsDto): Promise<any> {
+  async updateSettings(updateSettingsDto: UpdateNotificationSettingsDto, userId: string): Promise<any> {
     // In a real application, these settings would be stored in the database
     // and associated with the current user
     this.settings = {

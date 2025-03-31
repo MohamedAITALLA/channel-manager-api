@@ -43,9 +43,10 @@ export class SyncService {
         }
     }
 
-    async syncAllProperties(): Promise<{ success: boolean; message: string; results: SyncResult[] }> {
+    async syncAllProperties(userId: string): Promise<{ success: boolean; message: string; results: SyncResult[] }> {
         const connections = await this.icalConnectionModel.find({
             status: ConnectionStatus.ACTIVE,
+            user_id: userId
         }).exec();
 
         const results: SyncResult[] = [];
@@ -75,9 +76,10 @@ export class SyncService {
         };
     }
 
-    async syncProperty(propertyId: string): Promise<{ success: boolean; message: string; results: PropertySyncResult[] }> {
+    async syncProperty(propertyId: string, userId: string): Promise<{ success: boolean; message: string; results: PropertySyncResult[] }> {
         const connections = await this.icalConnectionModel.find({
             property_id: propertyId,
+            user_id: userId,
             status: ConnectionStatus.ACTIVE,
         }).exec();
 
@@ -112,6 +114,7 @@ export class SyncService {
 
                 // Create notification for sync failure
                 await this.notificationService.createNotification({
+                    user_id:connection.user_id.toString(),
                     property_id: connection.property_id.toString(), // Convert ObjectId to string
                     type: NotificationType.SYNC_FAILURE,
                     title: `Sync failed for ${connection.platform}`,
@@ -131,9 +134,10 @@ export class SyncService {
         };
     }
 
-    async getPropertySyncStatus(propertyId: string): Promise<any> {
+    async getPropertySyncStatus(propertyId: string, userId: string): Promise<any> {
         const connections = await this.icalConnectionModel.find({
             property_id: propertyId,
+            user_id: userId,
         }).exec();
 
         if (connections.length === 0) {
@@ -156,8 +160,8 @@ export class SyncService {
         };
     }
 
-    async getSyncHealthStatus(): Promise<any> {
-        const allConnections = await this.icalConnectionModel.find().exec();
+    async getSyncHealthStatus(userId: string): Promise<any> {
+        const allConnections = await this.icalConnectionModel.find({ user_id: userId }).exec();
 
         const totalConnections = allConnections.length;
         const activeConnections = allConnections.filter(c => c.status?.match(new RegExp(ConnectionStatus.ACTIVE, 'i'))).length;
@@ -252,6 +256,7 @@ export class SyncService {
                 for (const event of eventsToCreate) {
                     if (event.event_type?.toUpperCase() === EventType.BOOKING.toUpperCase()) {
                         await this.notificationService.createNotification({
+                            user_id:connection.user_id.toString(),
                             property_id: connection.property_id.toString(), // Convert ObjectId to string
                             type: NotificationType.NEW_BOOKING,
                             title: `New booking from ${connection.platform}`,
@@ -267,6 +272,7 @@ export class SyncService {
 
                 // Create notifications for modified bookings
                 await this.notificationService.createNotification({
+                    user_id:connection.user_id.toString(),
                     property_id: connection.property_id.toString(), // Convert ObjectId to string
                     type: NotificationType.MODIFIED_BOOKING,
                     title: `Booking modified on ${connection.platform}`,
@@ -285,6 +291,7 @@ export class SyncService {
 
                 // Create notifications for cancelled bookings
                 await this.notificationService.createNotification({
+                    user_id:connection.user_id.toString(),
                     property_id: connection.property_id.toString(), // Convert ObjectId to string
                     type: NotificationType.CANCELLED_BOOKING,
                     title: `${eventsToCancel.length} booking(s) cancelled on ${connection.platform}`,

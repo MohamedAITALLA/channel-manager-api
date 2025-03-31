@@ -1,4 +1,4 @@
-import { Controller, Get, Put, Body, Query, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Put, Body, Query, Param, UseGuards, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 import { NotificationService } from './notification.service';
 import { NotificationQueryDto } from './dto/notification-query.dto';
@@ -15,33 +15,38 @@ export class NotificationController {
 
   @Get()
   @ApiOperation({ summary: 'List all notifications with filtering options' })
-  async findAll(@Query() query: NotificationQueryDto) {
-    return this.notificationService.findAll(query);
+  async findAll(@Req() req: any, @Query() query: NotificationQueryDto) {
+    const userId = req.user.userId;
+    return this.notificationService.findAll(query, userId);
   }
 
   @Put('read')
   @ApiOperation({ summary: 'Mark all or specific notifications as read' })
-  async markAsRead(@Body() body?: { ids?: string[] }) {
+  async markAsRead(@Req() req: any, @Body() body?: { ids?: string[] }) {
+    const userId = req.user.userId;
     // If no body is provided or ids is not provided, mark all unread notifications as read
-    return this.notificationService.markAsRead(body?.ids);
+    return this.notificationService.markAsRead(body?.ids, userId);
   }
 
   @Put(':id/read')
   @ApiOperation({ summary: 'Mark a single notification as read by its ID' })
   @ApiParam({ name: 'id', description: 'Notification ID' })
-  async markOneAsRead(@Param('id') id: string) {
-    return this.notificationService.markOneAsRead(id);
+  async markOneAsRead(@Req() req: any, @Param('id') id: string) {
+    const userId = req.user.userId;
+    return this.notificationService.markOneAsRead(id, userId);
   }
 
   @Get('settings')
   @ApiOperation({ summary: 'Retrieve notification preferences' })
-  async getSettings() {
-    return this.notificationService.getSettings();
+  async getSettings(@Req() req: any) {
+    const userId = req.user.userId;
+    return this.notificationService.getSettings(userId);
   }
 
   @Put('settings')
   @ApiOperation({ summary: 'Update notification preferences' })
-  async updateSettings(@Body() updateSettingsDto: UpdateNotificationSettingsDto) {
-    return this.notificationService.updateSettings(updateSettingsDto);
+  async updateSettings(@Req() req: any, @Body() updateSettingsDto: UpdateNotificationSettingsDto) {
+    const userId = req.user.userId;
+    return this.notificationService.updateSettings(updateSettingsDto, userId);
   }
 }

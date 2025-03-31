@@ -12,14 +12,18 @@ export class PropertyService {
         @InjectModel(Property.name) private propertyModel: Model<Property>,
     ) { }
 
-    async create(createPropertyDto: CreatePropertyDto): Promise<Property> {
-        const createdProperty = new this.propertyModel(createPropertyDto);
+    async create(createPropertyDto: CreatePropertyDto, userId: string): Promise<Property> {
+        const createdProperty = new this.propertyModel({
+            ...createPropertyDto,
+            user_id: userId
+        });
         return createdProperty.save();
     }
 
     async findAll(
         paginationDto: PaginationDto,
         filters: { propertyType?: string; city?: string; sort?: string },
+        userId: string,
     ): Promise<{ data: Property[]; total: number; page: number; limit: number }> {
         // Convert page and limit to numbers and provide defaults
         const page = Number(paginationDto.page) || 1;
@@ -27,7 +31,7 @@ export class PropertyService {
         const skip = (page - 1) * limit;
 
         // Build query
-        const query: Record<string, any> = {};
+        const query: Record<string, any> = { user_id: userId };
 
         if (filters.propertyType) {
             query.property_type = filters.propertyType;
@@ -64,8 +68,8 @@ export class PropertyService {
     }
 
 
-    async findOne(id: string, include?: string): Promise<Property> {
-        let query = this.propertyModel.findById(id);
+    async findOne(id: string, userId: string, include?: string): Promise<Property> {
+        let query = this.propertyModel.findOne({ _id: id, user_id: userId });
 
         if (include) {
             const includes = include.split(',');
@@ -85,9 +89,13 @@ export class PropertyService {
         return property;
     }
 
-    async update(id: string, updatePropertyDto: UpdatePropertyDto): Promise<Property> {
+    async update(id: string, updatePropertyDto: UpdatePropertyDto, userId: string): Promise<Property> {
         const updatedProperty = await this.propertyModel
-            .findByIdAndUpdate(id, updatePropertyDto, { new: true })
+            .findOneAndUpdate(
+                { _id: id, user_id: userId },
+                updatePropertyDto,
+                { new: true }
+            )
             .exec();
 
         if (!updatedProperty) {
@@ -97,8 +105,8 @@ export class PropertyService {
         return updatedProperty;
     }
 
-    async remove(id: string, preserveHistory = false): Promise<void> {
-        const property = await this.propertyModel.findById(id).exec();
+    async remove(id: string, userId: string, preserveHistory = false): Promise<void> {
+        const property = await this.propertyModel.findOne({ _id: id, user_id: userId }).exec();
 
         if (!property) {
             throw new NotFoundException(`Property with ID ${id} not found`);

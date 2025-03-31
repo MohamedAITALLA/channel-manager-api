@@ -7,6 +7,9 @@ export class ICalConnection extends Document {
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Property', required: true })
   property_id: MongooseSchema.Types.ObjectId;
 
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User', required: true })
+  user_id: MongooseSchema.Types.ObjectId;
+
   @Prop({ required: true, enum: Object.values(Platform) })
   platform: Platform;
 
