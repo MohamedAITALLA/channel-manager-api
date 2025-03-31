@@ -17,7 +17,7 @@ export class AdminProfileService {
 
         // Get all users created by this admin
         const users = await this.userModel
-            .find({ created_by: adminId })
+            .find({ created_by: adminId, is_active:true })
             .select('_id')
             .exec();
 

@@ -12,7 +12,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 @UseGuards(JwtAuthGuard, AdminGuard)
 @Controller('admin/users')
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(private readonly adminService: AdminService) { }
 
   @Get()
   @ApiOperation({ summary: 'Get all users (admin only)' })
@@ -59,9 +59,10 @@ export class AdminController {
   @Delete(':id')
   @ApiOperation({ summary: 'Delete user (admin only)' })
   @ApiParam({ name: 'id', description: 'User ID' })
-  async deleteUser(@Req() req: any, @Param('id') userId: string) {
+  @ApiQuery({ name: 'preserve_history', required: false, type: Boolean })
+  async deleteUser(@Req() req: any, @Param('id') userId: string, @Query('preserve_history') preserveHistory?: boolean) {
     const adminId = req.user.userId;
-    return this.adminService.deleteUser(adminId, userId);
+    return this.adminService.deleteUser(adminId, userId, preserveHistory);
   }
 
   @Put(':id/promote')
