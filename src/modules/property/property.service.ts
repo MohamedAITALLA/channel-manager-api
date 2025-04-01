@@ -68,7 +68,6 @@ export class PropertyService {
             // Build query
             const query: Record<string, any> = { user_id: userId, is_active: true };
 
-            console.log("USER ID ===>",userId)
             if (filters.propertyType) {
                 query.property_type = filters.propertyType;
             }
@@ -94,7 +93,6 @@ export class PropertyService {
                 .limit(limit)
                 .exec();
 
-                console.log("DATA ===>",data)
             const total = await this.propertyModel.countDocuments(query).exec();
             
             // Get property type counts for summary

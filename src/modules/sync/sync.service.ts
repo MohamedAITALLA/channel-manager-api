@@ -20,7 +20,7 @@ export class SyncService {
         private readonly notificationService: NotificationService,
     ) { }
 
-    @Cron(CronExpression.EVERY_HOUR)
+    @Cron(CronExpression.EVERY_QUARTER)
     async handleCronSync() {
         try {
             // Find connections that need syncing based on their sync frequency
