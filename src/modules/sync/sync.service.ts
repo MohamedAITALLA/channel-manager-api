@@ -21,7 +21,160 @@ export class SyncService {
     ) { }
 
     @Cron(CronExpression.EVERY_QUARTER)
-    async handleCronSync() {
+    async handleCronSync15Min() {
+        try {
+            // Find connections that need syncing based on their sync frequency
+            const connections = await this.icalConnectionModel.find({
+                status: ConnectionStatus.ACTIVE,
+                $or: [
+                    { last_synced: { $exists: false } },
+                    {
+                        $expr: {
+                            $gt: [
+                                { $subtract: [new Date(), '$last_synced'] },
+                                { $multiply: ['$sync_frequency', 15 * 1000] } // Convert minutes to milliseconds
+                            ]
+                        }
+                    }
+                ]
+            }).exec();
+
+            const results = {
+                connections_processed: 0,
+                successful_syncs: 0,
+                failed_syncs: 0,
+                total_events_synced: 0,
+                errors: []
+            };
+
+            for (const connection of connections) {
+                try {
+                    results.connections_processed++;
+                    const syncResult = await this.syncConnection(connection);
+                    results.successful_syncs++;
+                    results.total_events_synced += syncResult.events_synced!;
+                } catch (error) {
+                    results.failed_syncs++;
+                    results.errors.push({
+                        property_id: connection.property_id.toString(),
+                        platform: connection.platform,
+                        error: error.message
+                    } as never);
+                }
+            }
+
+            console.log(`Cron sync completed: ${results.successful_syncs}/${results.connections_processed} connections synced successfully`);
+            return results;
+        } catch (error) {
+            console.error('Error in cron sync job:', error);
+            throw error;
+        }
+    }
+
+    @Cron(CronExpression.EVERY_30_MINUTES)
+    async handleCronSync30Min() {
+        try {
+            // Find connections that need syncing based on their sync frequency
+            const connections = await this.icalConnectionModel.find({
+                status: ConnectionStatus.ACTIVE,
+                $or: [
+                    { last_synced: { $exists: false } },
+                    {
+                        $expr: {
+                            $gt: [
+                                { $subtract: [new Date(), '$last_synced'] },
+                                { $multiply: ['$sync_frequency', 30 * 1000] } // Convert minutes to milliseconds
+                            ]
+                        }
+                    }
+                ]
+            }).exec();
+
+            const results = {
+                connections_processed: 0,
+                successful_syncs: 0,
+                failed_syncs: 0,
+                total_events_synced: 0,
+                errors: []
+            };
+
+            for (const connection of connections) {
+                try {
+                    results.connections_processed++;
+                    const syncResult = await this.syncConnection(connection);
+                    results.successful_syncs++;
+                    results.total_events_synced += syncResult.events_synced!;
+                } catch (error) {
+                    results.failed_syncs++;
+                    results.errors.push({
+                        property_id: connection.property_id.toString(),
+                        platform: connection.platform,
+                        error: error.message
+                    } as never);
+                }
+            }
+
+            console.log(`Cron sync completed: ${results.successful_syncs}/${results.connections_processed} connections synced successfully`);
+            return results;
+        } catch (error) {
+            console.error('Error in cron sync job:', error);
+            throw error;
+        }
+    }
+
+    @Cron('0 */45 * * * *')
+    async handleCronSync45Min() {
+        try {
+            // Find connections that need syncing based on their sync frequency
+            const connections = await this.icalConnectionModel.find({
+                status: ConnectionStatus.ACTIVE,
+                $or: [
+                    { last_synced: { $exists: false } },
+                    {
+                        $expr: {
+                            $gt: [
+                                { $subtract: [new Date(), '$last_synced'] },
+                                { $multiply: ['$sync_frequency', 45 * 1000] } // Convert minutes to milliseconds
+                            ]
+                        }
+                    }
+                ]
+            }).exec();
+
+            const results = {
+                connections_processed: 0,
+                successful_syncs: 0,
+                failed_syncs: 0,
+                total_events_synced: 0,
+                errors: []
+            };
+
+            for (const connection of connections) {
+                try {
+                    results.connections_processed++;
+                    const syncResult = await this.syncConnection(connection);
+                    results.successful_syncs++;
+                    results.total_events_synced += syncResult.events_synced!;
+                } catch (error) {
+                    results.failed_syncs++;
+                    results.errors.push({
+                        property_id: connection.property_id.toString(),
+                        platform: connection.platform,
+                        error: error.message
+                    } as never);
+                }
+            }
+
+            console.log(`Cron sync completed: ${results.successful_syncs}/${results.connections_processed} connections synced successfully`);
+            return results;
+        } catch (error) {
+            console.error('Error in cron sync job:', error);
+            throw error;
+        }
+    }
+
+    @Cron(CronExpression.EVERY_HOUR)
+    async handleCronSyncHour() {
         try {
             // Find connections that need syncing based on their sync frequency
             const connections = await this.icalConnectionModel.find({
@@ -70,6 +223,8 @@ export class SyncService {
             throw error;
         }
     }
+
+
 
     async syncAllProperties(userId: string): Promise<any> {
         try {
