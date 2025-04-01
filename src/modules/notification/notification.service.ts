@@ -64,7 +64,7 @@ export class NotificationService {
       const skip = (pageNum - 1) * limitNum;
 
       // Build filter
-      const filter: Record<string, any> = { user_id: userId, isFinite: true };
+      const filter: Record<string, any> = { user_id: userId, is_active: true };
 
       if (property_id) {
         filter.property_id = property_id;

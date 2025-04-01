@@ -10,7 +10,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 @UseGuards(JwtAuthGuard)
 @Controller('properties/:propertyId/calendar')
 export class CalendarController {
-  constructor(private readonly calendarService: CalendarService) {}
+  constructor(private readonly calendarService: CalendarService) { }
 
   @Get()
   @ApiOperation({ summary: 'Retrieve unified calendar for a property' })
@@ -37,7 +37,7 @@ export class CalendarController {
 @UseGuards(JwtAuthGuard)
 @Controller('properties/:propertyId/events')
 export class EventsController {
-  constructor(private readonly calendarService: CalendarService) {}
+  constructor(private readonly calendarService: CalendarService) { }
 
   @Get()
   @ApiOperation({ summary: 'List all booking events across platforms with filtering options' })
@@ -64,7 +64,7 @@ export class EventsController {
     @Param('eventId') eventId: string,
     @Query('preserve_history') preserveHistory?: boolean
   ) {
-    return this.calendarService.removeCalenderEevent(eventId,propertyId,preserveHistory);
+    return this.calendarService.removeCalenderEevent(eventId, propertyId, preserveHistory);
   }
 }
 
@@ -73,10 +73,15 @@ export class EventsController {
 @UseGuards(JwtAuthGuard)
 @Controller('properties/:propertyId/conflicts')
 export class ConflictsController {
-  constructor(private readonly calendarService: CalendarService) {}
+  constructor(private readonly calendarService: CalendarService) { }
 
   @Get()
   @ApiOperation({ summary: 'List all detected booking conflicts' })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    description: 'Filter conflicts by status'
+  })
   async getConflicts(
     @Param('propertyId') propertyId: string,
     @Query('status') status?: string,
@@ -92,6 +97,6 @@ export class ConflictsController {
     @Param('conflictId') conflictId: string,
     @Query('preserve_history') preserveHistory?: boolean
   ) {
-    return this.calendarService.removeConflict(conflictId,propertyId,preserveHistory);
+    return this.calendarService.removeConflict(conflictId, propertyId, preserveHistory);
   }
 }
