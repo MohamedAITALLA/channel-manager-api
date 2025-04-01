@@ -113,9 +113,18 @@ export class Property extends Document {
 
   @Prop({ type: [String], default: [] })
   images: string[];
-  
+
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User', required: true })
   user_id: MongooseSchema.Types.ObjectId;
+
+  @Prop({ default: true })
+  is_active: boolean;
+
+  @Prop()
+  created_at: Date;
+
+  @Prop()
+  updated_at: Date;
 }
 
 export const PropertySchema = SchemaFactory.createForClass(Property);

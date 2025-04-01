@@ -40,7 +40,35 @@ export class CalendarService {
       .sort({ start_date: 1 })
       .exec();
     
-    return events;
+    // Applied filters for response message
+    const appliedFilters:any[] = [];
+    if (query.start_date) appliedFilters.push(`start after ${query.start_date}`);
+    if (query.end_date) appliedFilters.push(`end before ${query.end_date}`);
+    if (query.platforms?.length) appliedFilters.push(`platforms: ${query.platforms.join(', ')}`);
+    if (query.event_types?.length) appliedFilters.push(`event types: ${query.event_types.join(', ')}`);
+    
+    const filterMessage = appliedFilters.length > 0 
+      ? ` with filters: ${appliedFilters.join('; ')}` 
+      : '';
+    
+    return {
+      success: true,
+      data: events,
+      meta: {
+        total: events.length,
+        property_id: propertyId,
+        filters: {
+          start_date: query.start_date || null,
+          end_date: query.end_date || null,
+          platforms: query.platforms || [],
+          event_types: query.event_types || [],
+        }
+      },
+      message: events.length > 0 
+        ? `Successfully retrieved ${events.length} calendar events${filterMessage}`
+        : `No calendar events found${filterMessage}`,
+      timestamp: new Date().toISOString(),
+    };
   }
 
   async checkAvailability(propertyId: string, startDateStr: string, endDateStr: string) {
@@ -70,12 +98,23 @@ export class CalendarService {
     
     const isAvailable = overlappingEvents.length === 0;
     
+    const durationMs = endDate.getTime() - startDate.getTime();
+    const durationDays = Math.ceil(durationMs / (1000 * 60 * 60 * 24));
+    
     return {
-      property_id: propertyId,
-      start_date: startDate,
-      end_date: endDate,
-      is_available: isAvailable,
-      conflicting_events: isAvailable ? [] : overlappingEvents,
+      success: true,
+      data: {
+        property_id: propertyId,
+        start_date: startDate,
+        end_date: endDate,
+        is_available: isAvailable,
+        conflicting_events: isAvailable ? [] : overlappingEvents,
+        duration_days: durationDays,
+      },
+      message: isAvailable 
+        ? `Property is available for the requested period (${durationDays} days)`
+        : `Property has ${overlappingEvents.length} conflicting booking(s) during the requested period`,
+      timestamp: new Date().toISOString(),
     };
   }
 
@@ -103,7 +142,30 @@ export class CalendarService {
       .sort({ start_date: 1 })
       .exec();
     
-    return events;
+    // Group events by platform for the metadata
+    const platformCounts = events.reduce((acc, event) => {
+      const platform = event.platform || 'unspecified';
+      acc[platform] = (acc[platform] || 0) + 1;
+      return acc;
+    }, {});
+    
+    return {
+      success: true,
+      data: events,
+      meta: {
+        total: events.length,
+        property_id: propertyId,
+        platforms: platformCounts,
+        date_range: {
+          from: query.start_date || 'any',
+          to: query.end_date || 'any',
+        }
+      },
+      message: events.length > 0 
+        ? `Successfully retrieved ${events.length} events for property ${propertyId}`
+        : `No events found for the specified criteria`,
+      timestamp: new Date().toISOString(),
+    };
   }
 
   async createManualEvent(propertyId: string, createEventDto: CreateEventDto) {
@@ -124,9 +186,26 @@ export class CalendarService {
     const savedEvent = await newEvent.save();
     
     // Check for conflicts
-    await this.conflictDetectorService.detectConflictsForEvent(savedEvent);
+    const conflicts = await this.conflictDetectorService.detectConflictsForEvent(savedEvent);
     
-    return savedEvent;
+    const startDate = new Date(savedEvent.start_date);
+    const endDate = new Date(savedEvent.end_date);
+    const durationMs = endDate.getTime() - startDate.getTime();
+    const durationDays = Math.ceil(durationMs / (1000 * 60 * 60 * 24));
+    
+    return {
+      success: true,
+      data: {
+        ...savedEvent.toObject(),
+        duration_days: durationDays,
+      },
+      meta: {
+        conflicts_detected: conflicts?.meta?.conflicts_detected || 0,
+        property_id: propertyId,
+      },
+      message: `Event created successfully for property ${propertyId}${conflicts?.length ? `. ${conflicts.length} conflicts detected.` : ''}`,
+      timestamp: new Date().toISOString(),
+    };
   }
 
   async getConflicts(propertyId: string, status?: string) {
@@ -142,12 +221,34 @@ export class CalendarService {
       .sort({ created_at: -1 })
       .exec();
     
-    return conflicts;
+    // Group conflicts by status
+    const statusCounts = conflicts.reduce((acc, conflict) => {
+      acc[conflict.status] = (acc[conflict.status] || 0) + 1;
+      return acc;
+    }, {});
+    
+    return {
+      success: true,
+      data: conflicts,
+      meta: {
+        total: conflicts.length,
+        property_id: propertyId,
+        status_filter: status || 'all',
+        status_breakdown: statusCounts,
+      },
+      message: conflicts.length > 0 
+        ? `Retrieved ${conflicts.length} conflicts${status ? ` with status '${status}'` : ''} for property ${propertyId}`
+        : `No conflicts found${status ? ` with status '${status}'` : ''} for property ${propertyId}`,
+      timestamp: new Date().toISOString(),
+    };
   }
 
-  async removeCalenderEevent(eventId: string, propertyId:string, preserve_history: boolean = false): Promise<CalendarEvent> {
+  async removeCalenderEevent(eventId: string, propertyId: string, preserve_history: boolean = false) {
+    let event;
+    let actionTaken;
+    
     if (preserve_history) {
-      const event = await this.calendarEventModel
+      event = await this.calendarEventModel
         .findOneAndUpdate(
           { _id: eventId, property_id: propertyId },
           { is_active: false },
@@ -155,44 +256,71 @@ export class CalendarService {
         )
         .exec();
       
-      if (!event) {
-        throw new NotFoundException(`Calendar event with ID ${eventId} not found`);
-      }
-      return event;
+      actionTaken = 'deactivated';
     } else {
-      const event = await this.calendarEventModel
-        .findOneAndDelete({ id: eventId, property_id: propertyId})
+      event = await this.calendarEventModel
+        .findOneAndDelete({ _id: eventId, property_id: propertyId })
         .exec();
       
-      if (!event) {
-        throw new NotFoundException(`Calendar event with ID ${eventId} not found`);
-      }
-      return event;
+      actionTaken = 'permanently deleted';
     }
+    
+    if (!event) {
+      throw new NotFoundException(`Calendar event with ID ${eventId} not found`);
+    }
+    
+    return {
+      success: true,
+      data: event.toObject(),
+      meta: {
+        property_id: propertyId,
+        event_id: eventId,
+        preserve_history,
+        action: actionTaken,
+      },
+      message: `Calendar event has been ${actionTaken} successfully`,
+      timestamp: new Date().toISOString(),
+    };
   }
-  async removeConflict(conflictId: string, propertyId:string, preserve_history: boolean = false): Promise<Conflict> {
+
+  async removeConflict(conflictId: string, propertyId: string, preserve_history: boolean = false) {
+    let conflict;
+    let actionTaken;
+    
     if (preserve_history) {
-      const event = await this.conflictModel
+      conflict = await this.conflictModel
         .findOneAndUpdate(
-          { _id: conflictId, property_id: propertyId},
+          { _id: conflictId, property_id: propertyId },
           { is_active: false },
           { new: true }
         )
         .exec();
       
-      if (!event) {
-        throw new NotFoundException(`Confilct with ID ${conflictId} not found`);
-      }
-      return event;
+      actionTaken = 'deactivated';
     } else {
-      const event = await this.conflictModel
-        .findOneAndDelete({ id: conflictId, property_id: propertyId})
+      conflict = await this.conflictModel
+        .findOneAndDelete({ _id: conflictId, property_id: propertyId })
         .exec();
       
-      if (!event) {
-        throw new NotFoundException(`Confilct with ID ${conflictId} not found`);
-      }
-      return event;
+      actionTaken = 'permanently deleted';
     }
+    
+    if (!conflict) {
+      throw new NotFoundException(`Conflict with ID ${conflictId} not found`);
+    }
+    
+    return {
+      success: true,
+      data: conflict.toObject(),
+      meta: {
+        property_id: propertyId,
+        conflict_id: conflictId,
+        preserve_history,
+        action: actionTaken,
+        affected_events: conflict.event_ids?.length || 0,
+      },
+      message: `Conflict has been ${actionTaken} successfully`,
+      timestamp: new Date().toISOString(),
+    };
   }
 }

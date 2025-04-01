@@ -8,6 +8,7 @@ import {
     Delete,
     UseGuards,
     Query,
+    Req,
   } from '@nestjs/common';
   import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
   import { ICalConnectionService } from './ical-connection.service';
@@ -31,10 +32,12 @@ import {
     @Post()
     @ApiOperation({ summary: 'Add a new iCal URL for a platform with validation' })
     async create(
+      @Req() req: any,
       @Param('propertyId') propertyId: string,
       @Body() createICalConnectionDto: CreateICalConnectionDto,
     ) {
-      return this.icalConnectionService.create(propertyId, createICalConnectionDto);
+      const userId = req.user.userId;
+      return this.icalConnectionService.create(propertyId, createICalConnectionDto ,userId);
     }
   
     @Get(':connectionId')

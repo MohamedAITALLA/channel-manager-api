@@ -21,14 +21,14 @@ export class IcalFeedController {
     const events = await this.calendarService.getCalendar(propertyId, {});
     
     // Generate iCal content
-    const icalContent = this.icalService.generateIcalContent(events, propertyId);
+    const icalContent = this.icalService.generateIcalContent(events.data, propertyId);
     
     // Set response headers
     res.setHeader('Content-Type', 'text/calendar');
     res.setHeader('Content-Disposition', `attachment; filename="property-${propertyId}.ics"`);
     
     // Send the response
-    return res.send(icalContent);
+    return res.send(icalContent.data.content);
   }
 
 

@@ -19,6 +19,9 @@ export class ICalConnection extends Document {
   @Prop()
   last_synced: Date;
 
+  @Prop()
+  last_error_time: Date
+
   @Prop({ default: 60 }) // Default to 60 minutes
   sync_frequency: number;
 
@@ -28,9 +31,17 @@ export class ICalConnection extends Document {
   @Prop()
   error_message: string;
 
-  
   @Prop({ default: true })
   is_active: boolean;
+
+  @Prop()
+  created_at: Date;
+
+  @Prop()
+  updated_at: Date;
+
+  @Prop()
+  sync_count: number;
 }
 
 export const ICalConnectionSchema = SchemaFactory.createForClass(ICalConnection);

@@ -8,13 +8,21 @@ export interface SyncResult {
     success: boolean;
     events_synced?: number;
     error?: string;
+    last_synced: Date;
+    sync_duration_ms?: number;
 }
 
 export interface PropertySyncResult {
     platform: string;
     success: boolean;
     events_synced?: number;
+    events_created?: number;
     error?: string;
+    events_updated?: number;
+    events_cancelled?:number;  
+    sync_duration_ms?: number;
+    last_synced?: Date;
+    conflicts?: any[]
 }
 
 // Define interface for calendar event data

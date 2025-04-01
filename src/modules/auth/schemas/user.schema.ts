@@ -24,6 +24,12 @@ export class User extends Document {
   
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User', default: null })
   created_by: string;
+
+  @Prop()
+  created_at: Date;
+  
+  @Prop()
+  updated_at: Date;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

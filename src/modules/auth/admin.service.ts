@@ -38,15 +38,28 @@ export class AdminService {
       .exec();
 
     const total = await this.userModel.countDocuments(query.getFilter());
+    const totalPages = Math.ceil(total / limit);
 
     return {
-      data: users,
+      success: true,
+      data: users.map(user => {
+        const userObj = user.toObject();
+        return {
+          ...userObj,
+          full_name: `${userObj.first_name} ${userObj.last_name}`,
+        };
+      }),
       meta: {
         total,
         page,
         limit,
-        pages: Math.ceil(total / limit),
+        pages: totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
       },
+      message: users.length > 0
+        ? `Successfully retrieved ${users.length} users`
+        : 'No users found matching the criteria',
     };
   }
 
@@ -62,10 +75,19 @@ export class AdminService {
 
     // Get user profile
     const profile = await this.userProfileModel.findOne({ user_id: userId }).exec();
+    const userObj = user.toObject();
 
     return {
-      user,
-      profile,
+      success: true,
+      data: {
+        user: {
+          ...userObj,
+          full_name: `${userObj.first_name} ${userObj.last_name}`,
+        },
+        profile: profile ? profile.toObject() : null,
+      },
+      message: 'User details retrieved successfully',
+      timestamp: new Date().toISOString(),
     };
   }
 
@@ -101,9 +123,19 @@ export class AdminService {
 
     await newUserProfile.save();
 
-    const { password: _, ...result } = savedUser.toObject();
+    const userObj = savedUser.toObject();
+    const { password: _, ...userData } = userObj;
 
-    return result;
+    return {
+      success: true,
+      data: {
+        ...userData,
+        full_name: `${userData.first_name} ${userData.last_name}`,
+        profile_id: newUserProfile._id,
+      },
+      message: 'User created successfully',
+      timestamp: new Date().toISOString(),
+    };
   }
 
   async updateUser(adminId: string, userId: string, updateUserDto: UpdateUserDto) {
@@ -113,6 +145,9 @@ export class AdminService {
     if (!user) {
       throw new NotFoundException('User not found or you do not have permission to update this user');
     }
+
+    // Keep track of what was updated
+    const updatedFields: string[] = [];
 
     // Update user fields
     if (updateUserDto.email) {
@@ -127,49 +162,94 @@ export class AdminService {
       }
 
       user.email = updateUserDto.email;
+      updatedFields.push('email');
     }
 
     if (updateUserDto.password) {
       user.password = await bcrypt.hash(updateUserDto.password, 10);
+      updatedFields.push('password');
     }
 
     if (updateUserDto.first_name) {
       user.first_name = updateUserDto.first_name;
+      updatedFields.push('first_name');
     }
 
     if (updateUserDto.last_name) {
       user.last_name = updateUserDto.last_name;
+      updatedFields.push('last_name');
     }
 
+    // Handle is_active with type safety
     if (updateUserDto.is_active !== undefined) {
-      user.is_active = updateUserDto.is_active;
+      // Using type assertion to handle potential type mismatch
+      (user as any).is_active = updateUserDto.is_active;
+      updatedFields.push('is_active');
     }
 
     const updatedUser = await user.save();
+    const userObj = updatedUser.toObject();
+    const { password: _, ...userData } = userObj;
 
-    const { password: _, ...result } = updatedUser.toObject();
-
-    return result;
+    return {
+      success: true,
+      data: {
+        ...userData,
+        full_name: `${userData.first_name} ${userData.last_name}`,
+      },
+      message: `User updated successfully. Updated fields: ${updatedFields.join(', ')}`,
+      timestamp: new Date().toISOString(),
+      updated_fields: updatedFields,
+    };
   }
 
-  async deleteUser(adminId: string, userId: string, preserveHistory = false): Promise<User> {
+  async deleteUser(adminId: string, userId: string, preserveHistory = false) {
+    let result;
+    let actionTaken;
 
     if (preserveHistory) {
-      const property = await this.userModel
-        .findOneAndUpdate({ _id: userId, created_by: adminId }, { is_active: false }, { new: true })
+      // Using type-safe update approach
+      const updateQuery = { is_active: false } as any;
+
+      const user = await this.userModel
+        .findOneAndUpdate(
+          { _id: userId, created_by: adminId },
+          updateQuery,
+          { new: true }
+        )
         .exec();
 
-      if (!property) {
+      if (!user) {
         throw new NotFoundException(`User with ID ${userId} not found`);
       }
-      return property;
+
+      result = user;
+      actionTaken = 'deactivated';
     } else {
-      const property = await this.userModel.findOneAndDelete({ _id: userId, created_by: adminId }).exec();
-      if (!property) {
+      const user = await this.userModel.findOneAndDelete({ _id: userId, created_by: adminId }).exec();
+
+      if (!user) {
         throw new NotFoundException(`User with ID ${userId} not found`);
       }
-      return property;
+
+      result = user;
+      actionTaken = 'permanently deleted';
     }
+
+    const userObj = result.toObject();
+    const { password: _, ...userData } = userObj;
+
+    return {
+      success: true,
+      data: {
+        ...userData,
+        full_name: `${userData.first_name} ${userData.last_name}`,
+      },
+      message: `User has been ${actionTaken} successfully`,
+      timestamp: new Date().toISOString(),
+      action: actionTaken,
+      preserveHistory,
+    };
   }
 
   async promoteToAdmin(adminId: string, userId: string) {
@@ -187,11 +267,21 @@ export class AdminService {
     user.is_admin = true;
     await user.save();
 
-    const { password: _, ...result } = user.toObject();
+    const userObj = user.toObject();
+    const { password: _, ...userData } = userObj;
 
     return {
-      ...result,
+      success: true,
+      data: {
+        ...userData,
+        full_name: `${userData.first_name} ${userData.last_name}`,
+        role: 'admin',
+      },
       message: 'User promoted to admin successfully',
+      timestamp: new Date().toISOString(),
+      action: 'promotion',
+      previous_role: 'user',
+      new_role: 'admin',
     };
   }
 
@@ -210,11 +300,21 @@ export class AdminService {
     user.is_admin = false;
     await user.save();
 
-    const { password: _, ...result } = user.toObject();
+    const userObj = user.toObject();
+    const { password: _, ...userData } = userObj;
 
     return {
-      ...result,
+      success: true,
+      data: {
+        ...userData,
+        full_name: `${userData.first_name} ${userData.last_name}`,
+        role: 'user',
+      },
       message: 'User demoted from admin successfully',
+      timestamp: new Date().toISOString(),
+      action: 'demotion',
+      previous_role: 'admin',
+      new_role: 'user',
     };
   }
 }

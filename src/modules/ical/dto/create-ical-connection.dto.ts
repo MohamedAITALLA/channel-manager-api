@@ -8,10 +8,6 @@ export class CreateICalConnectionDto {
   platform: Platform;
 
   @ApiProperty()
-  @IsMongoId()
-  user_id: string;
-
-  @ApiProperty()
   @IsUrl()
   ical_url: string;
 
