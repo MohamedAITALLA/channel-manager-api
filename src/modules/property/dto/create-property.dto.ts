@@ -141,6 +141,10 @@ export class CreatePropertyDto {
   @IsString()
   name: string;
 
+  @ApiProperty()
+  @IsString()
+  desc: string;
+
   @ApiProperty({ enum: PropertyType })
   @IsEnum(PropertyType)
   property_type: PropertyType;

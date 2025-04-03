@@ -87,6 +87,9 @@ export class Property extends Document {
   @Prop({ required: true })
   name: string;
 
+  @Prop({ required: false })
+  desc: string;
+
   @Prop({ required: true, enum: Object.values(PropertyType) })
   property_type: PropertyType;
 
