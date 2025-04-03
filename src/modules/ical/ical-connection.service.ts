@@ -62,7 +62,7 @@ export class ICalConnectionService {
   }
 
   async findAllByProperty(propertyId: string) {
-    const connections = await this.icalConnectionModel.find({ property_id: propertyId }).exec();
+    const connections = await this.icalConnectionModel.find({ property_id: propertyId, is_active:true }).exec();
     
     // Group connections by status
     const statusCounts = connections.reduce((acc, conn) => {
@@ -98,6 +98,7 @@ export class ICalConnectionService {
       .findOne({
         _id: connectionId,
         property_id: propertyId,
+        is_active:true
       })
       .exec();
 

@@ -25,7 +25,7 @@ export class SyncService {
         try {
             // Find connections that need syncing based on their sync frequency
             const connections = await this.icalConnectionModel.find({
-                status: ConnectionStatus.ACTIVE,
+                status: ConnectionStatus.ACTIVE,is_active:true,
                 $or: [
                     { last_synced: { $exists: false } },
                     {
@@ -76,7 +76,7 @@ export class SyncService {
         try {
             // Find connections that need syncing based on their sync frequency
             const connections = await this.icalConnectionModel.find({
-                status: ConnectionStatus.ACTIVE,
+                status: ConnectionStatus.ACTIVE,is_active:true,
                 $or: [
                     { last_synced: { $exists: false } },
                     {
@@ -127,7 +127,7 @@ export class SyncService {
         try {
             // Find connections that need syncing based on their sync frequency
             const connections = await this.icalConnectionModel.find({
-                status: ConnectionStatus.ACTIVE,
+                status: ConnectionStatus.ACTIVE,is_active:true,
                 $or: [
                     { last_synced: { $exists: false } },
                     {
@@ -178,7 +178,7 @@ export class SyncService {
         try {
             // Find connections that need syncing based on their sync frequency
             const connections = await this.icalConnectionModel.find({
-                status: ConnectionStatus.ACTIVE,
+                status: ConnectionStatus.ACTIVE,is_active:true,
                 $or: [
                     { last_synced: { $exists: false } },
                     {
@@ -229,7 +229,7 @@ export class SyncService {
     async syncAllProperties(userId: string): Promise<any> {
         try {
             const connections = await this.icalConnectionModel.find({
-                status: ConnectionStatus.ACTIVE,
+                status: ConnectionStatus.ACTIVE,is_active:true,
                 user_id: userId
             }).exec();
 
@@ -318,6 +318,7 @@ export class SyncService {
                 property_id: propertyId,
                 user_id: userId,
                 status: ConnectionStatus.ACTIVE,
+                is_active:true
             }).exec();
 
             if (connections.length === 0) {
@@ -432,6 +433,7 @@ export class SyncService {
             const connections = await this.icalConnectionModel.find({
                 property_id: propertyId,
                 user_id: userId,
+                is_active:true
             }).exec();
 
             if (connections.length === 0) {
@@ -525,7 +527,7 @@ export class SyncService {
 
     async getSyncHealthStatus(userId: string): Promise<any> {
         try {
-            const allConnections = await this.icalConnectionModel.find({ user_id: userId }).exec();
+            const allConnections = await this.icalConnectionModel.find({ user_id: userId, is_active:true }).exec();
 
             const totalConnections = allConnections.length;
             const activeConnections = allConnections.filter(c => 
@@ -687,6 +689,7 @@ export class SyncService {
             // Get existing events for this connection
             const existingEvents = await this.calendarEventModel.find({
                 connection_id: connection._id,
+                is_active:true
             }).exec();
 
             const existingEventMap = new Map<string, CalendarEvent>();
