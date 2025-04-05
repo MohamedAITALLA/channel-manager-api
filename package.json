@@ -29,14 +29,20 @@
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/schedule": "^5.0.1",
+    "@nestjs/serve-static": "^5.0.3",
     "@nestjs/swagger": "^11.1.0",
+    "@types/fs-extra": "^11.0.4",
+    "@types/multer": "^1.4.12",
     "bcrypt": "^5.1.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
+    "fs-extra": "^11.3.0",
+    "multer": "^1.4.5-lts.2",
     "node-ical": "^0.20.1",
     "passport-jwt": "^4.0.1",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",

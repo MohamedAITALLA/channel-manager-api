@@ -10,6 +10,7 @@ import { SyncModule } from './modules/sync/sync.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UserProfileModule } from './modules/user-profile/user-profile.module';
+import { StaticModule } from './common/modules/static.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { UserProfileModule } from './modules/user-profile/user-profile.module';
     CalendarModule,
     SyncModule,
     NotificationModule,
+    StaticModule, // Add the static module
   ],
 })
 export class AppModule {}

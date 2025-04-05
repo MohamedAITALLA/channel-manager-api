@@ -1,27 +1,38 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
+import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { join } from 'path';
+import * as express from 'express';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  
-  // Global validation pipe
-  app.useGlobalPipes(new ValidationPipe({ transform: true }));
-  
-  // CORS setup
+  const app = await NestFactory.create(AppModule, {
+    bodyParser: true, // Enable body parsing
+  });
+
+  // Set global prefix for all routes
+  app.setGlobalPrefix('api');
+
+  // Enable validation
+  app.useGlobalPipes(new ValidationPipe());
+
+  // Configure CORS
   app.enableCors();
-  
-  // Swagger documentation
+
+  // Serve static files
+  app.use('/property-images', express.static(join(process.cwd(), 'uploads', 'property-images')));
+
+
+  // Configure Swagger
   const config = new DocumentBuilder()
-    .setTitle('Multi-Platform Property Management API')
-    .setDescription('RESTful API that integrates with multiple booking platforms via iCalendar URLs')
-    .setVersion('1.0.0')
+    .setTitle('Property API')
+    .setDescription('API for managing properties')
+    .setVersion('1.0')
     .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
-  
+
   await app.listen(3000);
 }
 bootstrap();

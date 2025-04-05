@@ -186,9 +186,4 @@ export class CreatePropertyDto {
   @Type(() => PoliciesDto)
   policies?: PoliciesDto;
 
-  @ApiProperty({ required: false, type: [String] })
-  @IsOptional()
-  @IsArray()
-  @IsUrl({}, { each: true })
-  images?: string[];
 }
