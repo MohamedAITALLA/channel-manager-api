@@ -14,6 +14,7 @@ import { NotificationModule } from './modules/notification/notification.module';
 import { StaticModule } from './common/modules/static.module';
 import { EmailModule } from './modules/email/email.module';
 import { AuditModule } from './modules/audit/audit.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { AuditModule } from './modules/audit/audit.module';
     StaticModule,
     EmailModule,
     AuditModule,
+    AnalyticsModule,
   ],
 })
 export class AppModule {}
