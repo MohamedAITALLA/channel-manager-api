@@ -4,13 +4,14 @@ import { Model } from 'mongoose';
 import { CalendarEvent } from './schemas/calendar-event.schema';
 import { Conflict } from './schemas/conflict.schema';
 import { ConflictType, ConflictSeverity, ConflictStatus, EventStatus } from '../../common/types';
+import { ModuleRef } from '@nestjs/core';
 
 @Injectable()
 export class ConflictDetectorService {
-  moduleRef: any;
   constructor(
     @InjectModel(CalendarEvent.name) private calendarEventModel: Model<CalendarEvent>,
     @InjectModel(Conflict.name) private conflictModel: Model<Conflict>,
+    private readonly moduleRef: ModuleRef
   ) {}
 
   async detectConflictsForEvent(event: CalendarEvent): Promise<any> {
@@ -21,7 +22,7 @@ export class ConflictDetectorService {
     
     // Find overlapping events
     const overlappingEvents = await this.calendarEventModel.find({
-      property_id: event.property_id,
+      property_id: event.property_id, is_active:true,
       _id: { $ne: event._id }, // Exclude the current event
       status: { $regex: new RegExp(EventStatus.CONFIRMED, 'i') }, // Case-insensitive match
       $or: [
@@ -97,6 +98,7 @@ export class ConflictDetectorService {
     // Get all active events for the property
     const events = await this.calendarEventModel.find({
       property_id: propertyId,
+      is_active: true,
       status: { $regex: new RegExp(EventStatus.CONFIRMED, 'i') }, // Case-insensitive match
     }).exec();
     
@@ -333,7 +335,8 @@ async cleanupConflictsAfterConnectionRemoval(propertyId: string, connectionId: s
 
 // Helper method to check for overlaps in a set of events
 private checkForOverlap(events: CalendarEvent[]): boolean {
-  for (let i = 0; i < events.length; i++) {
+  const activeEvents = events.filter(e => e.is_active !== false);
+  for (let i = 0; i < activeEvents.length; i++) {
     for (let j = i + 1; j < events.length; j++) {
       if (this.eventsOverlap(events[i], events[j])) {
         return true;

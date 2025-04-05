@@ -54,7 +54,7 @@ export class UserProfileService {
   }
 
   async updateProfile(userId: string, updateProfileDto: UpdateUserProfileDto) {
-    const profile = await this.userProfileModel.findOne({ user_id: userId }).exec();
+    const profile = await this.userProfileModel.findOne({ user_id: userId, is_active:true }).exec();
     let isNewProfile = false;
     const updatedFields:any[] = [];
     
@@ -131,7 +131,7 @@ export class UserProfileService {
   }
 
   async resetProfile(userId: string) {
-    const profile = await this.userProfileModel.findOne({ user_id: userId }).exec();
+    const profile = await this.userProfileModel.findOne({ user_id: userId, is_active:true }).exec();
     
     if (!profile) {
       return {

@@ -43,6 +43,7 @@ export enum PropertyType {
     CANCELLED_BOOKING = 'cancelled_booking',
     BOOKING_CONFLICT = 'booking_conflict',
     SYNC_FAILURE = 'sync_failure',
+    ICAL_REMOVED = 'ical_removed',
   }
   
   export enum NotificationSeverity {
