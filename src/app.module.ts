@@ -1,16 +1,19 @@
+// src/app.module.ts
+
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ScheduleModule } from '@nestjs/schedule';
-
+import { UserProfileModule } from './modules/user-profile/user-profile.module';
+import { AuthModule } from './modules/auth/auth.module';
 import { PropertyModule } from './modules/property/property.module';
 import { IcalModule } from './modules/ical/ical.module';
 import { CalendarModule } from './modules/calendar/calendar.module';
 import { SyncModule } from './modules/sync/sync.module';
 import { NotificationModule } from './modules/notification/notification.module';
-import { AuthModule } from './modules/auth/auth.module';
-import { UserProfileModule } from './modules/user-profile/user-profile.module';
 import { StaticModule } from './common/modules/static.module';
+import { EmailModule } from './modules/email/email.module';
+import { AuditModule } from './modules/audit/audit.module';
 
 @Module({
   imports: [
@@ -32,7 +35,9 @@ import { StaticModule } from './common/modules/static.module';
     CalendarModule,
     SyncModule,
     NotificationModule,
-    StaticModule, // Add the static module
+    StaticModule,
+    EmailModule,
+    AuditModule,
   ],
 })
 export class AppModule {}
