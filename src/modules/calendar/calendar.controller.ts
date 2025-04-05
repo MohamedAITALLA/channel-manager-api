@@ -1,9 +1,10 @@
-import { Controller, Get, Post, Body, Param, Query, UseGuards, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, Delete } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { CalendarService } from './calendar.service';
 import { CalendarQueryDto } from './dto/calendar-query.dto';
 import { CreateEventDto } from './dto/create-event.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { UpdateEventDto } from './dto/update-event.dto';
 
 @ApiTags('Calendar')
 @ApiBearerAuth()
@@ -66,6 +67,17 @@ export class EventsController {
   ) {
     return this.calendarService.removeCalenderEevent(eventId, propertyId, preserveHistory);
   }
+
+  @Put(':eventId')
+  @ApiOperation({ summary: 'Update an existing event' })
+  async updateEvent(
+    @Param('propertyId') propertyId: string,
+    @Param('eventId') eventId: string,
+    @Body() updateEventDto: UpdateEventDto,
+  ) {
+    return this.calendarService.updateEvent(eventId, propertyId, updateEventDto);
+  }
+
 }
 
 @ApiTags('Conflicts')

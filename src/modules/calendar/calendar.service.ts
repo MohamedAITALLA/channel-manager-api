@@ -7,6 +7,7 @@ import { CalendarQueryDto } from './dto/calendar-query.dto';
 import { CreateEventDto } from './dto/create-event.dto';
 import { ConflictDetectorService } from './conflict-detector.service';
 import { Platform, EventStatus, ConflictStatus } from '../../common/types';
+import { UpdateEventDto } from './dto/update-event.dto';
 
 @Injectable()
 export class CalendarService {
@@ -168,10 +169,41 @@ export class CalendarService {
     };
   }
 
+  // In src/modules/calendar/calendar.service.ts
+
   async createManualEvent(propertyId: string, createEventDto: CreateEventDto) {
     // Validate dates
     if (createEventDto.start_date >= createEventDto.end_date) {
       throw new BadRequestException('End date must be after start date');
+    }
+
+    // Check for overlapping events
+    const availabilityCheck = await this.checkEventOverlap(
+      propertyId,
+      createEventDto.start_date,
+      createEventDto.end_date
+    );
+
+    // If there are overlapping events, return a conflict response
+    if (!availabilityCheck.isAvailable) {
+      const conflictingEvents = availabilityCheck.conflictingEvents.map(event => ({
+        id: event._id,
+        summary: event.summary,
+        start_date: event.start_date,
+        end_date: event.end_date,
+        platform: event.platform
+      }));
+
+      return {
+        success: false,
+        error: 'Date range conflict',
+        details: {
+          message: 'The selected dates conflict with existing events',
+          conflicting_events: conflictingEvents,
+          property_id: propertyId,
+        },
+        timestamp: new Date().toISOString(),
+      };
     }
 
     // Generate a unique iCal UID for manual events
@@ -207,6 +239,97 @@ export class CalendarService {
       timestamp: new Date().toISOString(),
     };
   }
+
+  // In src/modules/calendar/calendar.service.ts
+
+  async updateEvent(eventId: string, propertyId: string, updateEventDto: UpdateEventDto) {
+    // Find the existing event
+    const existingEvent = await this.calendarEventModel.findOne({
+      _id: eventId,
+      property_id: propertyId,
+      is_active: true
+    }).exec();
+
+    if (!existingEvent) {
+      throw new NotFoundException(`Event with ID ${eventId} not found`);
+    }
+
+    // Prepare the updated event data
+    const updatedEventData: any = { ...updateEventDto };
+
+    // If start or end dates are being updated, check for conflicts
+    if (updatedEventData.start_date || updatedEventData.end_date) {
+      const startDate = updatedEventData.start_date || existingEvent.start_date;
+      const endDate = updatedEventData.end_date || existingEvent.end_date;
+
+      // Validate dates
+      if (startDate >= endDate) {
+        throw new BadRequestException('End date must be after start date');
+      }
+
+      // Check for overlapping events (excluding this event)
+      const availabilityCheck = await this.checkEventOverlap(
+        propertyId,
+        startDate,
+        endDate,
+        eventId
+      );
+
+      // If there are overlapping events, return a conflict response
+      if (!availabilityCheck.isAvailable) {
+        const conflictingEvents = availabilityCheck.conflictingEvents.map(event => ({
+          id: event._id,
+          summary: event.summary,
+          start_date: event.start_date,
+          end_date: event.end_date,
+          platform: event.platform
+        }));
+
+        return {
+          success: false,
+          error: 'Date range conflict',
+          details: {
+            message: 'The updated dates conflict with existing events',
+            conflicting_events: conflictingEvents,
+            property_id: propertyId,
+            event_id: eventId
+          },
+          timestamp: new Date().toISOString(),
+        };
+      }
+    }
+
+    // Update the event
+    updatedEventData.updated_at = new Date();
+    const updatedEvent = await this.calendarEventModel.findByIdAndUpdate(
+      eventId,
+      updatedEventData,
+      { new: true }
+    ).exec();
+
+    // Check for conflicts
+    const conflicts = await this.conflictDetectorService.detectConflictsForEvent(updatedEvent!);
+
+    const startDate = new Date(updatedEvent?.start_date!);
+    const endDate = new Date(updatedEvent?.end_date!);
+    const durationMs = endDate.getTime() - startDate.getTime();
+    const durationDays = Math.ceil(durationMs / (1000 * 60 * 60 * 24));
+
+    return {
+      success: true,
+      data: {
+        ...updatedEvent!.toObject(),
+        duration_days: durationDays,
+      },
+      meta: {
+        conflicts_detected: conflicts?.meta?.conflicts_detected || 0,
+        property_id: propertyId,
+      },
+      message: `Event updated successfully for property ${propertyId}${conflicts?.length ? `. ${conflicts.length} conflicts detected.` : ''}`,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
 
   async getConflicts(propertyId: string, status?: string) {
     const filter: any = { property_id: propertyId, is_active: true };
@@ -364,5 +487,36 @@ export class CalendarService {
       };
     }
   }
+
+  // In src/modules/calendar/calendar.service.ts
+
+  async checkEventOverlap(propertyId: string, startDate: Date, endDate: Date, excludeEventId?: string): Promise<{
+    isAvailable: boolean;
+    conflictingEvents: CalendarEvent[];
+  }> {
+    // Build the query to find overlapping events
+    const query: any = {
+      property_id: propertyId,
+      is_active: true,
+      status: { $regex: new RegExp(EventStatus.CONFIRMED, 'i') }, // Case-insensitive match
+      $or: [
+        { start_date: { $lt: endDate }, end_date: { $gt: startDate } },
+      ],
+    };
+
+    // If we're editing an existing event, exclude it from the check
+    if (excludeEventId) {
+      query._id = { $ne: excludeEventId };
+    }
+
+    // Find overlapping events
+    const overlappingEvents = await this.calendarEventModel.find(query).exec();
+
+    return {
+      isAvailable: overlappingEvents.length === 0,
+      conflictingEvents: overlappingEvents
+    };
+  }
+
 
 }
