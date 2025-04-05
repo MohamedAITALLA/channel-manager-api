@@ -29,7 +29,7 @@ export class PropertyService {
     async create(
         createPropertyDto: CreatePropertyDto,
         userId: string,
-        images?: Array<Express.Multer.File>,
+        images: Array<Express.Multer.File>=[],
     ): Promise<any> {
         try {
             // First create the property to get an ID
@@ -325,8 +325,8 @@ export class PropertyService {
         id: string,
         updatePropertyDto: UpdatePropertyDto,
         userId: string,
-        images?: Array<Express.Multer.File>,
-        deleteImages?: string[],
+        images: Array<Express.Multer.File>=[],
+        deleteImages: string[]=[],
     ): Promise<any> {
         try {
             // Find the property first to get the original state

@@ -52,22 +52,165 @@ import { memoryStorage } from 'multer';
       schema: {
         type: 'object',
         properties: {
-          property: {
-            type: 'string',
-            description: 'JSON string of the property data',
-          },
+           property: {
+                type: "object",
+                properties: {
+                  name: {
+                    type: "string",
+                    description: "Name of the property"
+                  },
+                  desc: {
+                    type: "string",
+                    description: "Description of the property"
+                  },
+                  property_type: {
+                    type: "string",
+                    enum: ["APARTMENT", "HOUSE", "ROOM", "HOTEL", "CABIN", "VILLA"],
+                    description: "Type of the property"
+                  },
+                  address: {
+                    type: "object",
+                    properties: {
+                      street: {
+                        type: "string"
+                      },
+                      city: {
+                        type: "string"
+                      },
+                      state_province: {
+                        type: "string"
+                      },
+                      postal_code: {
+                        type: "string"
+                      },
+                      country: {
+                        type: "string"
+                      },
+                      coordinates: {
+                        type: "object",
+                        properties: {
+                          latitude: {
+                            type: "number"
+                          },
+                          longitude: {
+                            type: "number"
+                          }
+                        }
+                      }
+                    },
+                    required: ["street", "city", "state_province", "postal_code", "country"]
+                  },
+                  accommodates: {
+                    type: "number",
+                    minimum: 1,
+                    description: "Number of people the property can accommodate"
+                  },
+                  bedrooms: {
+                    type: "number",
+                    minimum: 0,
+                    description: "Number of bedrooms"
+                  },
+                  beds: {
+                    type: "number",
+                    minimum: 0,
+                    description: "Number of beds"
+                  },
+                  bathrooms: {
+                    type: "number",
+                    minimum: 0,
+                    description: "Number of bathrooms"
+                  },
+                  amenities: {
+                    type: "object",
+                    properties: {
+                      wifi: {
+                        type: "boolean",
+                        default: false
+                      },
+                      kitchen: {
+                        type: "boolean",
+                        default: false
+                      },
+                      ac: {
+                        type: "boolean",
+                        default: false
+                      },
+                      heating: {
+                        type: "boolean",
+                        default: false
+                      },
+                      tv: {
+                        type: "boolean",
+                        default: false
+                      },
+                      washer: {
+                        type: "boolean",
+                        default: false
+                      },
+                      dryer: {
+                        type: "boolean",
+                        default: false
+                      },
+                      parking: {
+                        type: "boolean",
+                        default: false
+                      },
+                      elevator: {
+                        type: "boolean",
+                        default: false
+                      },
+                      pool: {
+                        type: "boolean",
+                        default: false
+                      }
+                    }
+                  },
+                  policies: {
+                    type: "object",
+                    properties: {
+                      check_in_time: {
+                        type: "string",
+                        pattern: "^([01]\\d|2[0-3]):([0-5]\\d)$",
+                        default: "15:00"
+                      },
+                      check_out_time: {
+                        type: "string",
+                        pattern: "^([01]\\d|2[0-3]):([0-5]\\d)$",
+                        default: "11:00"
+                      },
+                      minimum_stay: {
+                        type: "number",
+                        minimum: 1,
+                        default: 1
+                      },
+                      pets_allowed: {
+                        type: "boolean",
+                        default: false
+                      },
+                      smoking_allowed: {
+                        type: "boolean",
+                        default: false
+                      }
+                    }
+                  }
+                },
+                required: ["name", "desc", "property_type", "address", "accommodates", "bedrooms", "beds", "bathrooms"],
+                description: "JSON string of the property data"
+              },
           images: {
             type: 'array',
             items: {
               type: 'string',
               format: 'binary',
             },
+            description: 'Images to upload (optional)',
           },
         },
+        required: ['property'], // Only property is required
       },
     })
     @UseInterceptors(FilesInterceptor('images', 10, {
-      storage: memoryStorage(), // This is crucial - use memory storage
+      storage: memoryStorage(),
       fileFilter: (req, file, callback) => {
         if (!file.originalname.match(/\.(jpg|jpeg|png|gif)$/)) {
           return callback(new BadRequestException('Only image files are allowed!'), false);
@@ -78,15 +221,20 @@ import { memoryStorage } from 'multer';
     async create(
       @Req() req: any,
       @Body('property') propertyString: string,
-      @UploadedFiles() images: Array<Express.Multer.File>,
+      @UploadedFiles() images?: Array<Express.Multer.File>,
     ) {
-      // Parse the property data from string to object
-      const createPropertyDto: CreatePropertyDto = JSON.parse(propertyString);
-      const userId = req.user.userId;
-      return this.propertyService.create(createPropertyDto, userId, images);
+      try {
+        // Parse the property data from string to object
+        const createPropertyDto: CreatePropertyDto = JSON.parse(propertyString);
+        const userId = req.user.userId;
+        return this.propertyService.create(createPropertyDto, userId, images || []);
+      } catch (error) {
+        throw new BadRequestException(`Failed to process create request: ${error.message}`);
+      }
     }
     
-  
+    
+    
     @Get(':id')
     @ApiOperation({ summary: 'Retrieve a specific property by ID with optional inclusion of related data' })
     @ApiQuery({ name: 'include', required: false })
@@ -102,28 +250,169 @@ import { memoryStorage } from 'multer';
       schema: {
         type: 'object',
         properties: {
-          property: {
-            type: 'string',
-            description: 'JSON string of the property data to update',
-          },
+           property: {
+                type: "object",
+                properties: {
+                  name: {
+                    type: "string",
+                    description: "Name of the property"
+                  },
+                  desc: {
+                    type: "string",
+                    description: "Description of the property"
+                  },
+                  property_type: {
+                    type: "string",
+                    enum: ["APARTMENT", "HOUSE", "ROOM", "HOTEL", "CABIN", "VILLA"],
+                    description: "Type of the property"
+                  },
+                  address: {
+                    type: "object",
+                    properties: {
+                      street: {
+                        type: "string"
+                      },
+                      city: {
+                        type: "string"
+                      },
+                      state_province: {
+                        type: "string"
+                      },
+                      postal_code: {
+                        type: "string"
+                      },
+                      country: {
+                        type: "string"
+                      },
+                      coordinates: {
+                        type: "object",
+                        properties: {
+                          latitude: {
+                            type: "number"
+                          },
+                          longitude: {
+                            type: "number"
+                          }
+                        }
+                      }
+                    },
+                    required: ["street", "city", "state_province", "postal_code", "country"]
+                  },
+                  accommodates: {
+                    type: "number",
+                    minimum: 1,
+                    description: "Number of people the property can accommodate"
+                  },
+                  bedrooms: {
+                    type: "number",
+                    minimum: 0,
+                    description: "Number of bedrooms"
+                  },
+                  beds: {
+                    type: "number",
+                    minimum: 0,
+                    description: "Number of beds"
+                  },
+                  bathrooms: {
+                    type: "number",
+                    minimum: 0,
+                    description: "Number of bathrooms"
+                  },
+                  amenities: {
+                    type: "object",
+                    properties: {
+                      wifi: {
+                        type: "boolean",
+                        default: false
+                      },
+                      kitchen: {
+                        type: "boolean",
+                        default: false
+                      },
+                      ac: {
+                        type: "boolean",
+                        default: false
+                      },
+                      heating: {
+                        type: "boolean",
+                        default: false
+                      },
+                      tv: {
+                        type: "boolean",
+                        default: false
+                      },
+                      washer: {
+                        type: "boolean",
+                        default: false
+                      },
+                      dryer: {
+                        type: "boolean",
+                        default: false
+                      },
+                      parking: {
+                        type: "boolean",
+                        default: false
+                      },
+                      elevator: {
+                        type: "boolean",
+                        default: false
+                      },
+                      pool: {
+                        type: "boolean",
+                        default: false
+                      }
+                    }
+                  },
+                  policies: {
+                    type: "object",
+                    properties: {
+                      check_in_time: {
+                        type: "string",
+                        pattern: "^([01]\\d|2[0-3]):([0-5]\\d)$",
+                        default: "15:00"
+                      },
+                      check_out_time: {
+                        type: "string",
+                        pattern: "^([01]\\d|2[0-3]):([0-5]\\d)$",
+                        default: "11:00"
+                      },
+                      minimum_stay: {
+                        type: "number",
+                        minimum: 1,
+                        default: 1
+                      },
+                      pets_allowed: {
+                        type: "boolean",
+                        default: false
+                      },
+                      smoking_allowed: {
+                        type: "boolean",
+                        default: false
+                      }
+                    }
+                  }
+                },
+                required: ["name", "desc", "property_type", "address", "accommodates", "bedrooms", "beds", "bathrooms"],
+                description: "JSON string of the property data"
+              },
           images: {
             type: 'array',
             items: {
               type: 'string',
               format: 'binary',
             },
-            description: 'New images to upload',
+            description: 'New images to upload (optional)',
           },
           deleteImages: {
             type: 'string',
-            description: 'JSON array of image URLs to delete',
+            description: 'JSON array of image URLs to delete (optional)',
           },
         },
-        required: ['property'],
+        required: ['property'], // Only property is required
       },
     })
     @UseInterceptors(FilesInterceptor('images', 10, {
-      storage: memoryStorage(), // This is crucial - use memory storage
+      storage: memoryStorage(),
       fileFilter: (req, file, callback) => {
         if (!file.originalname.match(/\.(jpg|jpeg|png|gif)$/)) {
           return callback(new BadRequestException('Only image files are allowed!'), false);
@@ -135,20 +424,35 @@ import { memoryStorage } from 'multer';
       @Req() req: any,
       @Param('id') id: string,
       @Body('property') propertyString: string,
-      @Body('deleteImages') deleteImagesString: string,
-      @UploadedFiles() images: Array<Express.Multer.File>,
+      @Body('deleteImages') deleteImagesString?: string,
+      @UploadedFiles() images?: Array<Express.Multer.File>,
     ) {
-      // Parse the property data from string to object
-      const updatePropertyDto: UpdatePropertyDto = propertyString ? JSON.parse(propertyString) : {};
-      
-      // Parse the deleteImages array if provided
-      const deleteImages: string[] = deleteImagesString ? JSON.parse(deleteImagesString) : [];
-      
-      const userId = req.user.userId;
-      return this.propertyService.update(id, updatePropertyDto, userId, images, deleteImages);
+      try {
+        // Parse the property data from string to object
+        const updatePropertyDto: UpdatePropertyDto = propertyString ? JSON.parse(propertyString) : {};
+        
+        // Parse the deleteImages array if provided, otherwise use empty array
+        let deleteImages: string[] = [];
+        
+        if (deleteImagesString) {
+          try {
+            deleteImages = JSON.parse(deleteImagesString);
+            if (!Array.isArray(deleteImages)) {
+              deleteImages = []; // Reset to empty array if not valid
+            }
+          } catch (error) {
+            // If parsing fails, just use empty array
+            deleteImages = [];
+          }
+        }
+        
+        const userId = req.user.userId;
+        return this.propertyService.update(id, updatePropertyDto, userId, images || [], deleteImages);
+      } catch (error) {
+        throw new BadRequestException(`Failed to process update request: ${error.message}`);
+      }
     }
     
-  
     @Delete(':id')
     @ApiOperation({ summary: 'Remove a property from the system (with option to preserve historical data)' })
     @ApiQuery({ name: 'preserve_history', required: false, type: Boolean })

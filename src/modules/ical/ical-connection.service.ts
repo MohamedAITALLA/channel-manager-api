@@ -1,14 +1,18 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
+import { getModelToken, InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { ICalConnection } from './schemas/ical-connection.schema';
 import { CreateICalConnectionDto } from './dto/create-ical-connection.dto';
 import { UpdateICalConnectionDto } from './dto/update-ical-connection.dto';
 import { IcalService } from './ical.service';
-import { ConnectionStatus } from '../../common/types';
+import { ConnectionStatus, NotificationSeverity, NotificationType } from '../../common/types';
+import { CalendarEvent } from '../calendar/schemas/calendar-event.schema';
+import { NotificationService } from '../notification/notification.service';
+import { ConflictDetectorService } from '../calendar/conflict-detector.service';
 
 @Injectable()
 export class ICalConnectionService {
+  moduleRef: any;
   constructor(
     @InjectModel(ICalConnection.name) private icalConnectionModel: Model<ICalConnection>,
     private readonly icalService: IcalService,
@@ -182,46 +186,190 @@ export class ICalConnectionService {
     };
   }
   
-  async remove(propertyId: string, connectionId: string, preserve_history: boolean = false) {
-    let connection;
-    let actionTaken;
-    
-    if (preserve_history) {
-      connection = await this.icalConnectionModel
-        .findOneAndUpdate(
-          { _id: connectionId, property_id: propertyId },
-          { is_active: false },
-          { new: true }
-        )
-        .exec();
-      
-      actionTaken = 'deactivated';
-    } else {
-      connection = await this.icalConnectionModel
-        .findOneAndDelete({ _id: connectionId, property_id: propertyId })
-        .exec();
-      
-      actionTaken = 'permanently deleted';
-    }
-    
-    if (!connection) {
-      throw new NotFoundException(`iCal connection with ID ${connectionId} not found`);
-    }
-    
-    return {
-      success: true,
-      data: connection,
-      meta: {
-        property_id: propertyId,
-        connection_id: connectionId,
-        platform: connection.platform,
-        preserve_history,
-        action: actionTaken,
-      },
-      message: `iCal connection for ${connection.platform} has been ${actionTaken} successfully`,
-      timestamp: new Date().toISOString(),
-    };
+// src/modules/ical/ical-connection.service.ts
+async remove(
+  propertyId: string, 
+  connectionId: string, 
+  preserve_history: boolean = false, 
+  eventAction: 'delete' | 'deactivate' | 'convert' | 'keep' = 'keep'
+) {
+  let connection;
+  let actionTaken;
+  
+  // Find the connection to ensure it exists
+  const existingConnection = await this.icalConnectionModel.findOne({
+    _id: connectionId,
+    property_id: propertyId
+  }).exec();
+  
+  if (!existingConnection) {
+    throw new NotFoundException(`iCal connection with ID ${connectionId} not found`);
   }
+  
+  // Handle the connection itself
+  if (preserve_history) {
+    connection = await this.icalConnectionModel
+      .findOneAndUpdate(
+        { _id: connectionId, property_id: propertyId },
+        { is_active: false },
+        { new: true }
+      )
+      .exec();
+    
+    actionTaken = 'deactivated';
+  } else {
+    connection = await this.icalConnectionModel
+      .findOneAndDelete({ _id: connectionId, property_id: propertyId })
+      .exec();
+    
+    actionTaken = 'permanently deleted';
+  }
+  
+  // Handle associated events
+  const eventsResult = await this.handleAssociatedEvents(
+    propertyId, 
+    connectionId, 
+    eventAction, 
+    preserve_history
+  );
+  
+  // Clean up conflicts
+  const conflictDetectorService = this.moduleRef.get(ConflictDetectorService, { strict: false });
+  const conflictsResult = await conflictDetectorService.cleanupConflictsAfterConnectionRemoval(
+    propertyId,
+    connectionId
+  );
+  
+  // Notify the user
+  await this.notifyUserAboutConnectionRemoval(
+    propertyId,
+    connection,
+    actionTaken,
+    eventsResult.count,
+    eventAction
+  );
+  
+  // Create an audit trail entry
+  await this.createAuditTrailEntry(
+    propertyId,
+    connection,
+    actionTaken,
+    eventAction,
+    eventsResult.count
+  );
+  
+  return {
+    success: true,
+    data: connection,
+    meta: {
+      property_id: propertyId,
+      connection_id: connectionId,
+      platform: connection.platform,
+      preserve_history,
+      action: actionTaken,
+      events_action: eventAction,
+      events_affected: eventsResult.count,
+      conflicts_processed: conflictsResult.affected_conflicts,
+    },
+    message: `iCal connection for ${connection.platform} has been ${actionTaken} successfully. ${eventsResult.message}`,
+    timestamp: new Date().toISOString(),
+  };
+}
+
+// Method to create an audit trail entry
+private async createAuditTrailEntry(
+  propertyId: string,
+  connection: ICalConnection,
+  actionTaken: string,
+  eventAction: string,
+  eventsAffected: number
+): Promise<void> {
+  // In a real implementation, you would save this to an audit log collection
+  console.log(`AUDIT: ${new Date().toISOString()} - Connection ${connection._id} (${connection.platform}) for property ${propertyId} was ${actionTaken}. ${eventsAffected} events were ${eventAction}.`);
+}
+
+
+// Add a new method to handle associated events
+private async handleAssociatedEvents(
+  propertyId: string,
+  connectionId: string,
+  action: 'delete' | 'deactivate' | 'convert' | 'keep',
+  preserveHistory: boolean
+): Promise<{ count: number; message: string }> {
+  // Inject CalendarEvent model
+  const calendarEventModel = this.moduleRef.get(getModelToken(CalendarEvent.name), { strict: false });
+  
+  // Find all events associated with this connection
+  const query = { 
+    property_id: propertyId,
+    connection_id: connectionId,
+    is_active: true
+  };
+  
+  const eventsCount = await calendarEventModel.countDocuments(query).exec();
+  
+  if (eventsCount === 0) {
+    return { count: 0, message: 'No events were associated with this connection.' };
+  }
+  
+  switch (action) {
+    case 'delete':
+      if (preserveHistory) {
+        // Soft delete - mark as inactive
+        await calendarEventModel.updateMany(
+          query,
+          { is_active: false, updated_at: new Date() }
+        ).exec();
+        return { 
+          count: eventsCount, 
+          message: `${eventsCount} associated events have been deactivated.` 
+        };
+      } else {
+        // Hard delete
+        await calendarEventModel.deleteMany(query).exec();
+        return { 
+          count: eventsCount, 
+          message: `${eventsCount} associated events have been permanently deleted.` 
+        };
+      }
+      
+    case 'deactivate':
+      // Just mark as inactive
+      await calendarEventModel.updateMany(
+        query,
+        { is_active: false, updated_at: new Date() }
+      ).exec();
+      return { 
+        count: eventsCount, 
+        message: `${eventsCount} associated events have been deactivated.` 
+      };
+      
+    case 'convert':
+      // Convert to manual events by removing connection_id and setting platform to 'manual'
+      await calendarEventModel.updateMany(
+        query,
+        { 
+          connection_id: null, 
+          platform: 'manual', 
+          updated_at: new Date(),
+          ical_uid: null // Remove the ical_uid to prevent conflicts with future syncs
+        }
+      ).exec();
+      return { 
+        count: eventsCount, 
+        message: `${eventsCount} associated events have been converted to manual events.` 
+      };
+      
+    case 'keep':
+    default:
+      // Do nothing to the events
+      return { 
+        count: eventsCount, 
+        message: `${eventsCount} associated events remain unchanged. These events may become stale without their connection.` 
+      };
+  }
+}
+
 
   async testConnection(propertyId: string, connectionId: string) {
     const connectionResult = await this.findOne(propertyId, connectionId);
@@ -292,4 +440,33 @@ export class ICalConnectionService {
       };
     }
   }
+
+  // src/modules/ical/ical-connection.service.ts
+
+private async notifyUserAboutConnectionRemoval(
+  propertyId: string,
+  connection: ICalConnection,
+  actionTaken: string,
+  eventsAffected: number,
+  eventAction: string
+): Promise<void> {
+  try {
+    // Inject the notification service
+    const notificationService = this.moduleRef.get(NotificationService, { strict: false });
+    
+    // Create a notification about the connection removal
+    await notificationService.createNotification({
+      property_id: propertyId,
+      user_id: connection.user_id.toString(),
+      type: NotificationType.SYNC_FAILURE,
+      title: `iCal Connection ${actionTaken}`,
+      message: `Your ${connection.platform} calendar connection has been ${actionTaken}. ${eventsAffected} events were ${eventAction}. This may affect your property's availability.`,
+      severity: NotificationSeverity.WARNING
+    });
+  } catch (error) {
+    console.error(`Failed to create notification: ${error.message}`);
+    // Don't throw the error - this is a non-critical operation
+  }
+}
+
 }

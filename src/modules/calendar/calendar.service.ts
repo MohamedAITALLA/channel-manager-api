@@ -323,4 +323,46 @@ export class CalendarService {
       timestamp: new Date().toISOString(),
     };
   }
+
+  // src/modules/calendar/calendar.service.ts
+
+async transferEventOwnership(
+  eventIds: string[], 
+  newPlatform: Platform = Platform.MANUAL
+): Promise<any> {
+  try {
+    const updatedEvents = await this.calendarEventModel.updateMany(
+      { _id: { $in: eventIds } },
+      { 
+        platform: newPlatform,
+        connection_id: null,
+        ical_uid: null,
+        updated_at: new Date()
+      }
+    ).exec();
+    
+    return {
+      success: true,
+      data: {
+        matched_count: updatedEvents.matchedCount,
+        modified_count: updatedEvents.modifiedCount,
+        new_platform: newPlatform
+      },
+      message: `${updatedEvents.modifiedCount} events transferred to ${newPlatform} platform`,
+      timestamp: new Date().toISOString()
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: 'Failed to transfer event ownership',
+      details: {
+        message: error.message,
+        event_ids: eventIds,
+        new_platform: newPlatform
+      },
+      timestamp: new Date().toISOString()
+    };
+  }
+}
+
 }

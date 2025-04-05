@@ -63,17 +63,29 @@ import {
       );
     }
   
+
     @Delete(':connectionId')
     @ApiOperation({ summary: 'Remove an iCal connection' })
     @ApiQuery({ name: 'preserve_history', required: false, type: Boolean })
+    @ApiQuery({ 
+      name: 'event_action', 
+      required: false, 
+      enum: ['delete', 'deactivate', 'convert', 'keep'],
+      description: 'Action to take on associated events: delete, deactivate, convert to manual, or keep unchanged'
+    })
     async remove(
       @Param('propertyId') propertyId: string,
       @Param('connectionId') connectionId: string,
-      @Query('preserve_history') preserveHistory?: boolean
+      @Query('preserve_history') preserveHistory?: boolean,
+      @Query('event_action') eventAction?: 'delete' | 'deactivate' | 'convert' | 'keep'
     ) {
-      return this.icalConnectionService.remove(propertyId,connectionId,preserveHistory);
+      return this.icalConnectionService.remove(
+        propertyId,
+        connectionId,
+        preserveHistory,
+        eventAction || 'keep'
+      );
     }
-  
     @Post(':connectionId/test')
     @ApiOperation({ summary: 'Test an iCal connection for validity' })
     async test(
