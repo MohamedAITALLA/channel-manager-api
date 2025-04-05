@@ -28,4 +28,9 @@ export class UpdateUserDto {
   @IsOptional()
   @IsBoolean()
   is_active?: boolean;
+  
+  @ApiProperty({ required: false, description: 'Manually set email confirmation status' })
+  @IsOptional()
+  @IsBoolean()
+  email_confirmed?: boolean;
 }

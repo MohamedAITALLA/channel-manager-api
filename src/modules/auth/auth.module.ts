@@ -1,3 +1,4 @@
+// src/modules/auth/auth.module.ts
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { PassportModule } from '@nestjs/passport';
@@ -11,6 +12,7 @@ import { User, UserSchema } from './schemas/user.schema';
 import { UserProfile, UserProfileSchema } from '../user-profile/schemas/user-profile.schema';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { AdminGuard } from './guards/admin.guard';
+import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [
@@ -27,6 +29,7 @@ import { AdminGuard } from './guards/admin.guard';
       { name: User.name, schema: UserSchema },
       { name: UserProfile.name, schema: UserProfileSchema },
     ]),
+    EmailModule,
   ],
   controllers: [AuthController, AdminController],
   providers: [AuthService, AdminService, JwtStrategy, AdminGuard],

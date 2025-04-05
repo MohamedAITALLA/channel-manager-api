@@ -105,12 +105,14 @@ export class AdminService {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Create new user with admin as creator
+    // Set email_confirmed to true directly since admin-created users don't need confirmation
     const newUser = new this.userModel({
       email,
       password: hashedPassword,
       first_name,
       last_name,
       created_by: adminId,
+      email_confirmed: true, // Auto-confirm email for admin-created users
     });
 
     const savedUser = await newUser.save();
@@ -133,7 +135,7 @@ export class AdminService {
         full_name: `${userData.first_name} ${userData.last_name}`,
         profile_id: newUserProfile._id,
       },
-      message: 'User created successfully',
+      message: 'User created successfully with pre-confirmed email',
       timestamp: new Date().toISOString(),
     };
   }
@@ -162,11 +164,15 @@ export class AdminService {
       }
 
       user.email = updateUserDto.email;
+      // When admin changes email, keep it confirmed
+      user.email_confirmed = true;
       updatedFields.push('email');
     }
 
     if (updateUserDto.password) {
       user.password = await bcrypt.hash(updateUserDto.password, 10);
+      // Update password_changed_at timestamp
+      user.password_changed_at = new Date();
       updatedFields.push('password');
     }
 
@@ -185,6 +191,12 @@ export class AdminService {
       // Using type assertion to handle potential type mismatch
       (user as any).is_active = updateUserDto.is_active;
       updatedFields.push('is_active');
+    }
+
+    // Handle email_confirmed explicitly (if admin wants to manually confirm a user's email)
+    if (updateUserDto.email_confirmed !== undefined) {
+      user.email_confirmed = updateUserDto.email_confirmed;
+      updatedFields.push('email_confirmed');
     }
 
     const updatedUser = await user.save();
@@ -315,6 +327,72 @@ export class AdminService {
       action: 'demotion',
       previous_role: 'admin',
       new_role: 'user',
+    };
+  }
+
+  // Add a method to manually confirm a user's email
+  async confirmUserEmail(adminId: string, userId: string) {
+    const user = await this.userModel.findOne({ _id: userId, created_by: adminId }).exec();
+
+    if (!user) {
+      throw new NotFoundException('User not found or you do not have permission to confirm this user\'s email');
+    }
+
+    if (user.email_confirmed) {
+      return {
+        success: true,
+        message: 'User email was already confirmed',
+        data: {
+          userId: user._id,
+          email: user.email,
+          email_confirmed: true
+        }
+      };
+    }
+
+    user.email_confirmed = true;
+    user.confirmation_token = undefined!;
+    user.confirmation_token_expires = undefined!;
+    await user.save();
+
+    return {
+      success: true,
+      message: 'User email confirmed successfully by admin',
+      data: {
+        userId: user._id,
+        email: user.email,
+        email_confirmed: true
+      }
+    };
+  }
+
+  // Add a method to reset user password directly (without email)
+  async resetUserPassword(adminId: string, userId: string, newPassword: string) {
+    const user = await this.userModel.findOne({ _id: userId, created_by: adminId }).exec();
+
+    if (!user) {
+      throw new NotFoundException('User not found or you do not have permission to reset this user\'s password');
+    }
+
+    // Hash the new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    
+    // Update user password
+    user.password = hashedPassword;
+    user.password_changed_at = new Date();
+    user.password_reset_token = undefined!;
+    user.password_reset_expires = undefined!;
+    
+    await user.save();
+
+    return {
+      success: true,
+      message: 'User password reset successfully by admin',
+      data: {
+        userId: user._id,
+        email: user.email,
+        password_changed_at: user.password_changed_at
+      }
     };
   }
 }

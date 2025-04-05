@@ -6,6 +6,7 @@ import { AdminGuard } from './guards/admin.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RegisterDto } from './dto/register.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { AdminResetPasswordDto } from './dto/admin-reset-password.dto';
 
 @ApiTags('Admin')
 @ApiBearerAuth()
@@ -79,5 +80,25 @@ export class AdminController {
   async demoteFromAdmin(@Req() req: any, @Param('id') userId: string) {
     const adminId = req.user.userId;
     return this.adminService.demoteFromAdmin(adminId, userId);
+  }
+
+  @Put(':id/confirm-email')
+  @ApiOperation({ summary: 'Manually confirm user email (admin only)' })
+  @ApiParam({ name: 'id', description: 'User ID' })
+  async confirmUserEmail(@Req() req: any, @Param('id') userId: string) {
+    const adminId = req.user.userId;
+    return this.adminService.confirmUserEmail(adminId, userId);
+  }
+
+  @Put(':id/reset-password')
+  @ApiOperation({ summary: 'Reset user password directly (admin only)' })
+  @ApiParam({ name: 'id', description: 'User ID' })
+  async resetUserPassword(
+    @Req() req: any,
+    @Param('id') userId: string,
+    @Body() resetPasswordDto: AdminResetPasswordDto
+  ) {
+    const adminId = req.user.userId;
+    return this.adminService.resetUserPassword(adminId, userId, resetPasswordDto.password);
   }
 }

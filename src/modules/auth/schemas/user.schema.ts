@@ -21,15 +21,35 @@ export class User extends Document {
 
   @Prop({ default: true })
   is_active: boolean;
-  
+
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User', default: null })
   created_by: string;
 
   @Prop()
   created_at: Date;
-  
+
   @Prop()
   updated_at: Date;
+
+  @Prop({ default: false })
+  email_confirmed: boolean;
+
+  @Prop()
+  confirmation_token: string;
+
+  @Prop()
+  confirmation_token_expires: Date;
+
+  // Add to your User schema
+  @Prop()
+  password_reset_token: string;
+
+  @Prop()
+  password_reset_expires: Date;
+
+  @Prop()
+  password_changed_at: Date;
+
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
