@@ -14,85 +14,113 @@ export class ConflictDetectorService {
     private readonly moduleRef: ModuleRef
   ) {}
 
-  async detectConflictsForEvent(event: CalendarEvent): Promise<any> {
-    // Skip conflict detection for cancelled events
-    if (event.status?.toLowerCase() === EventStatus.CANCELLED.toLowerCase()) {
-      return [];
-    }
-    
-    // Find overlapping events
-    const overlappingEvents = await this.calendarEventModel.find({
-      property_id: event.property_id, is_active:true,
-      _id: { $ne: event._id }, // Exclude the current event
-      status: { $regex: new RegExp(EventStatus.CONFIRMED, 'i') }, // Case-insensitive match
-      $or: [
-        { start_date: { $lt: event.end_date }, end_date: { $gt: event.start_date } },
-      ],
-    }).exec();
-    
-    if (overlappingEvents.length === 0) {
-      return {
-        success: true,
-        data: [],
-        meta: {
-          property_id: event.property_id,
-          event_id: event._id,
-          event_platform: event.platform,
-          conflicts_detected: 0,
-        },
-        message: 'No conflicts detected for this event',
-        timestamp: new Date().toISOString(),
-      }.data;
-    }
-    
-    // Create a conflict record
-    const conflict = new this.conflictModel({
-      property_id: event.property_id,
-      event_ids: [event._id, ...overlappingEvents.map(e => e._id)],
-      conflict_type: ConflictType.OVERLAP,
-      start_date: this.getEarliestDate([event, ...overlappingEvents]),
-      end_date: this.getLatestDate([event, ...overlappingEvents]),
-      severity: ConflictSeverity.HIGH,
-      status: ConflictStatus.NEW,
-      description: `Booking conflict detected between ${overlappingEvents.length + 1} events`,
-    });
-    
-    const savedConflict = await conflict.save();
-    
-    // Format the duration of the conflict
-    const conflictDurationMs = savedConflict.end_date.getTime() - savedConflict.start_date.getTime();
-    const conflictDurationDays = Math.ceil(conflictDurationMs / (1000 * 60 * 60 * 24));
-    
-    // Get platform information for the message
-    const platforms = [...new Set([
-      event.platform,
-      ...overlappingEvents.map(e => e.platform)
-    ])].filter(Boolean);
-    
-    const platformsStr = platforms.length > 0 
-      ? `across platforms: ${platforms.join(', ')}` 
-      : '';
-    
+
+  // In src/modules/calendar/conflict-detector.service.ts - modify the detectConflictsForEvent method
+
+async detectConflictsForEvent(event: CalendarEvent): Promise<any> {
+  // Skip conflict detection for cancelled events
+  if (event.status?.toLowerCase() === EventStatus.CANCELLED.toLowerCase()) {
+    return [];
+  }
+  
+  // Find overlapping events
+  const overlappingEvents = await this.calendarEventModel.find({
+    property_id: event.property_id, is_active: true,
+    _id: { $ne: event._id }, // Exclude the current event
+    status: { $regex: new RegExp(EventStatus.CONFIRMED, 'i') }, // Case-insensitive match
+    $or: [
+      { start_date: { $lt: event.end_date }, end_date: { $gt: event.start_date } },
+    ],
+  }).exec();
+  
+  if (overlappingEvents.length === 0) {
     return {
       success: true,
-      data: [savedConflict],
+      data: [],
       meta: {
         property_id: event.property_id,
         event_id: event._id,
         event_platform: event.platform,
-        conflicts_detected: 1,
-        conflict_details: {
-          type: ConflictType.OVERLAP,
-          severity: ConflictSeverity.HIGH,
-          duration_days: conflictDurationDays,
-          affected_events: overlappingEvents.length + 1,
-          platforms: platforms,
-        },
+        conflicts_detected: 0,
       },
-      message: `Detected ${overlappingEvents.length + 1}-way booking conflict ${platformsStr} spanning ${conflictDurationDays} days`,
+      message: 'No conflicts detected for this event',
       timestamp: new Date().toISOString(),
     }.data;
   }
+  
+  // Calculate duration for all events including the current one
+  const allEvents = [event, ...overlappingEvents];
+  const eventsWithDuration = allEvents.map(e => {
+    const startDate = new Date(e.start_date);
+    const endDate = new Date(e.end_date);
+    const durationMs = endDate.getTime() - startDate.getTime();
+    const durationDays = Math.ceil(durationMs / (1000 * 60 * 60 * 24));
+    
+    return {
+      id: e._id,
+      summary: e.summary,
+      start_date: e.start_date,
+      end_date: e.end_date,
+      platform: e.platform,
+      duration_days: durationDays,
+      duration_ms: durationMs
+    };
+  });
+  
+  // Sort events by duration (ascending)
+  eventsWithDuration.sort((a, b) => a.duration_ms - b.duration_ms);
+  
+  // Create a conflict record
+  const conflict = new this.conflictModel({
+    property_id: event.property_id,
+    event_ids: allEvents.map(e => e._id),
+    conflict_type: ConflictType.OVERLAP,
+    start_date: this.getEarliestDate(allEvents),
+    end_date: this.getLatestDate(allEvents),
+    severity: ConflictSeverity.HIGH,
+    status: ConflictStatus.NEW,
+    description: `Booking conflict detected between ${overlappingEvents.length + 1} events`,
+  });
+  
+  const savedConflict = await conflict.save();
+  
+  // Format the duration of the conflict
+  const conflictDurationMs = savedConflict.end_date.getTime() - savedConflict.start_date.getTime();
+  const conflictDurationDays = Math.ceil(conflictDurationMs / (1000 * 60 * 60 * 24));
+  
+  // Get platform information for the message
+  const platforms = [...new Set([
+    event.platform,
+    ...overlappingEvents.map(e => e.platform)
+  ])].filter(Boolean);
+  
+  const platformsStr = platforms.length > 0 
+    ? `across platforms: ${platforms.join(', ')}` 
+    : '';
+  
+  return {
+    success: true,
+    data: [savedConflict],
+    meta: {
+      property_id: event.property_id,
+      event_id: event._id,
+      event_platform: event.platform,
+      conflicts_detected: 1,
+      conflict_details: {
+        type: ConflictType.OVERLAP,
+        severity: ConflictSeverity.HIGH,
+        duration_days: conflictDurationDays,
+        affected_events: overlappingEvents.length + 1,
+        platforms: platforms,
+        events_by_duration: eventsWithDuration,
+        shortest_event: eventsWithDuration[0],
+        longest_event: eventsWithDuration[eventsWithDuration.length - 1],
+      },
+    },
+    message: `Detected ${overlappingEvents.length + 1}-way booking conflict ${platformsStr} spanning ${conflictDurationDays} days`,
+    timestamp: new Date().toISOString(),
+  }.data;
+}
 
   async detectAllConflictsForProperty(propertyId: string): Promise<any> {
     // Get all active events for the property

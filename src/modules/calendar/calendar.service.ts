@@ -8,6 +8,7 @@ import { CreateEventDto } from './dto/create-event.dto';
 import { ConflictDetectorService } from './conflict-detector.service';
 import { Platform, EventStatus, ConflictStatus } from '../../common/types';
 import { UpdateEventDto } from './dto/update-event.dto';
+import { ConflictResolutionStrategy, ResolveConflictDto } from './dto/resolve-conflict.dto';
 
 @Injectable()
 export class CalendarService {
@@ -518,5 +519,249 @@ export class CalendarService {
     };
   }
 
+// In src/modules/calendar/calendar.service.ts - add these methods
+
+async resolveConflict(
+  propertyId: string,
+  conflictId: string,
+  resolveConflictDto: ResolveConflictDto
+): Promise<any> {
+  try {
+    // Find the conflict
+    const conflict = await this.conflictModel.findOne({
+      _id: conflictId,
+      property_id: propertyId,
+      is_active: true
+    }).exec();
+
+    if (!conflict) {
+      throw new NotFoundException(`Conflict with ID ${conflictId} not found for property ${propertyId}`);
+    }
+
+    // Get all events involved in the conflict
+    const allEventIds = conflict.event_ids.map(id => id.toString());
+    const eventsToRemove = allEventIds.filter(id => !resolveConflictDto.eventsToKeep.includes(id));
+
+    if (eventsToRemove.length === 0) {
+      return {
+        success: false,
+        message: 'No events selected for removal',
+        details: {
+          conflict_id: conflictId,
+          property_id: propertyId,
+          all_events: allEventIds,
+          events_to_keep: resolveConflictDto.eventsToKeep
+        },
+        timestamp: new Date().toISOString()
+      };
+    }
+
+    // Process the events based on the selected strategy
+    let actionTaken: string;
+    
+    if (resolveConflictDto.strategy === ConflictResolutionStrategy.DELETE) {
+      // Permanently delete the events
+      await this.calendarEventModel.deleteMany({
+        _id: { $in: eventsToRemove },
+        property_id: propertyId
+      }).exec();
+      actionTaken = 'deleted';
+    } else {
+      // Deactivate the events
+      await this.calendarEventModel.updateMany(
+        { _id: { $in: eventsToRemove }, property_id: propertyId },
+        { is_active: false }
+      ).exec();
+      actionTaken = 'deactivated';
+    }
+
+    // Mark the conflict as resolved
+    await this.conflictModel.findByIdAndUpdate(
+      conflictId,
+      { status: ConflictStatus.RESOLVED, is_active: false }
+    ).exec();
+
+    // Get details of the remaining events for the response
+    const remainingEvents = await this.calendarEventModel.find({
+      _id: { $in: resolveConflictDto.eventsToKeep },
+      property_id: propertyId
+    }).exec();
+
+    return {
+      success: true,
+      data: {
+        conflict_id: conflictId,
+        property_id: propertyId,
+        resolution_strategy: resolveConflictDto.strategy,
+        events_kept: remainingEvents.map(event => ({
+          id: event._id,
+          summary: event.summary,
+          start_date: event.start_date,
+          end_date: event.end_date,
+          platform: event.platform
+        })),
+        events_removed: eventsToRemove,
+        events_count: {
+          total: allEventIds.length,
+          kept: resolveConflictDto.eventsToKeep.length,
+          removed: eventsToRemove.length
+        }
+      },
+      message: `Conflict resolved successfully. ${eventsToRemove.length} events were ${actionTaken}.`,
+      timestamp: new Date().toISOString()
+    };
+  } catch (error) {
+    if (error instanceof NotFoundException) {
+      throw error;
+    }
+    
+    return {
+      success: false,
+      error: 'Failed to resolve conflict',
+      details: {
+        message: error.message,
+        conflict_id: conflictId,
+        property_id: propertyId
+      },
+      timestamp: new Date().toISOString()
+    };
+  }
+}
+
+async autoResolveConflict(
+  propertyId: string,
+  conflictId: string,
+  strategy: ConflictResolutionStrategy = ConflictResolutionStrategy.DEACTIVATE
+): Promise<any> {
+  try {
+    // Find the conflict
+    const conflict = await this.conflictModel.findOne({
+      _id: conflictId,
+      property_id: propertyId,
+      is_active: true
+    }).exec();
+
+    if (!conflict) {
+      throw new NotFoundException(`Conflict with ID ${conflictId} not found for property ${propertyId}`);
+    }
+
+    // Get all events involved in the conflict
+    const events = await this.calendarEventModel.find({
+      _id: { $in: conflict.event_ids },
+      property_id: propertyId
+    }).exec();
+
+    if (events.length < 2) {
+      return {
+        success: false,
+        message: 'Not enough events found to resolve conflict',
+        details: {
+          conflict_id: conflictId,
+          property_id: propertyId,
+          events_found: events.length
+        },
+        timestamp: new Date().toISOString()
+      };
+    }
+
+    // Calculate duration for each event and sort by duration (ascending)
+    const eventsWithDuration = events.map(event => {
+      const startDate = new Date(event.start_date);
+      const endDate = new Date(event.end_date);
+      const durationMs = endDate.getTime() - startDate.getTime();
+      const durationDays = Math.ceil(durationMs / (1000 * 60 * 60 * 24));
+      
+      return {
+        id: event._id,
+        summary: event.summary,
+        start_date: event.start_date,
+        end_date: event.end_date,
+        platform: event.platform,
+        duration_days: durationDays,
+        duration_ms: durationMs
+      };
+    });
+
+    // Sort events by duration (ascending)
+    eventsWithDuration.sort((a, b) => a.duration_ms - b.duration_ms);
+
+    // The event with the longest duration will be kept
+    const eventToKeep = eventsWithDuration[eventsWithDuration.length - 1];
+    const eventsToRemove = eventsWithDuration.slice(0, -1);
+    
+    // Process the events based on the selected strategy
+    let actionTaken: string;
+    
+    if (strategy === ConflictResolutionStrategy.DELETE) {
+      // Permanently delete the events
+      await this.calendarEventModel.deleteMany({
+        _id: { $in: eventsToRemove.map(e => e.id) },
+        property_id: propertyId
+      }).exec();
+      actionTaken = 'deleted';
+    } else {
+      // Deactivate the events
+      await this.calendarEventModel.updateMany(
+        { _id: { $in: eventsToRemove.map(e => e.id) }, property_id: propertyId },
+        { is_active: false }
+      ).exec();
+      actionTaken = 'deactivated';
+    }
+
+    // Mark the conflict as resolved
+    await this.conflictModel.findByIdAndUpdate(
+      conflictId,
+      { status: ConflictStatus.RESOLVED, is_active: false }
+    ).exec();
+
+    return {
+      success: true,
+      data: {
+        conflict_id: conflictId,
+        property_id: propertyId,
+        resolution_strategy: strategy,
+        auto_resolution_method: 'keep_longest_booking',
+        event_kept: {
+          id: eventToKeep.id,
+          summary: eventToKeep.summary,
+          start_date: eventToKeep.start_date,
+          end_date: eventToKeep.end_date,
+          platform: eventToKeep.platform,
+          duration_days: eventToKeep.duration_days
+        },
+        events_removed: eventsToRemove.map(event => ({
+          id: event.id,
+          summary: event.summary,
+          start_date: event.start_date,
+          end_date: event.end_date,
+          platform: event.platform,
+          duration_days: event.duration_days
+        })),
+        events_count: {
+          total: events.length,
+          kept: 1,
+          removed: eventsToRemove.length
+        }
+      },
+      message: `Conflict auto-resolved successfully. Kept the longest booking (${eventToKeep.duration_days} days) and ${actionTaken} ${eventsToRemove.length} shorter bookings.`,
+      timestamp: new Date().toISOString()
+    };
+  } catch (error) {
+    if (error instanceof NotFoundException) {
+      throw error;
+    }
+    
+    return {
+      success: false,
+      error: 'Failed to auto-resolve conflict',
+      details: {
+        message: error.message,
+        conflict_id: conflictId,
+        property_id: propertyId
+      },
+      timestamp: new Date().toISOString()
+    };
+  }
+}
 
 }

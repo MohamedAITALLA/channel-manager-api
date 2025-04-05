@@ -1,10 +1,11 @@
 import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, Delete } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { CalendarService } from './calendar.service';
 import { CalendarQueryDto } from './dto/calendar-query.dto';
 import { CreateEventDto } from './dto/create-event.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UpdateEventDto } from './dto/update-event.dto';
+import { ConflictResolutionStrategy, ResolveConflictDto } from './dto/resolve-conflict.dto';
 
 @ApiTags('Calendar')
 @ApiBearerAuth()
@@ -111,4 +112,32 @@ export class ConflictsController {
   ) {
     return this.calendarService.removeConflict(conflictId, propertyId, preserveHistory);
   }
+
+  // In src/modules/calendar/calendar.controller.ts - extend the ConflictsController
+
+  @Post(':conflictId/resolve')
+  @ApiOperation({ summary: 'Resolve a conflict by removing or deactivating conflicting events' })
+  @ApiParam({ name: 'propertyId', description: 'Property ID' })
+  @ApiParam({ name: 'conflictId', description: 'Conflict ID to resolve' })
+  async resolveConflict(
+    @Param('propertyId') propertyId: string,
+    @Param('conflictId') conflictId: string,
+    @Body() resolveConflictDto: ResolveConflictDto
+  ) {
+    return this.calendarService.resolveConflict(propertyId, conflictId, resolveConflictDto);
+  }
+
+  @Post(':conflictId/auto-resolve')
+  @ApiOperation({ summary: 'Automatically resolve a conflict by removing/deactivating events with shorter duration' })
+  @ApiParam({ name: 'propertyId', description: 'Property ID' })
+  @ApiParam({ name: 'conflictId', description: 'Conflict ID to resolve' })
+  @ApiQuery({ name: 'strategy', enum: ConflictResolutionStrategy, required: false })
+  async autoResolveConflict(
+    @Param('propertyId') propertyId: string,
+    @Param('conflictId') conflictId: string,
+    @Query('strategy') strategy: ConflictResolutionStrategy = ConflictResolutionStrategy.DEACTIVATE
+  ) {
+    return this.calendarService.autoResolveConflict(propertyId, conflictId, strategy);
+  }
+
 }
