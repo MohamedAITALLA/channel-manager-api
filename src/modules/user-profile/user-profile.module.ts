@@ -7,6 +7,7 @@ import { AdminProfileController } from './admin-profile.controller';
 import { AdminProfileService } from './admin-profile.service';
 import { UserProfile, UserProfileSchema } from './schemas/user-profile.schema';
 import { User, UserSchema } from '../auth/schemas/user.schema';
+import { UploadService } from '../../common/services/upload.service';
 
 @Module({
   imports: [
@@ -16,7 +17,7 @@ import { User, UserSchema } from '../auth/schemas/user.schema';
     ]),
   ],
   controllers: [UserProfileController, AdminProfileController],
-  providers: [UserProfileService, AdminProfileService],
+  providers: [UserProfileService, AdminProfileService, UploadService],
   exports: [UserProfileService, AdminProfileService],
 })
 export class UserProfileModule {}

@@ -21,6 +21,7 @@ async function bootstrap() {
 
   // Serve static files
   app.use('/property-images', express.static(join(process.cwd(), 'uploads', 'property-images')));
+  app.use('/profile-images', express.static(join(process.cwd(), 'uploads', 'profile-images')));
 
 
   // Configure Swagger

@@ -1,8 +1,11 @@
-import { Controller, Get, Put, Post, Body, UseGuards, Req } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+// src/modules/user-profile/user-profile.controller.ts
+import { Controller, Get, Put, Post, Body, UseGuards, Req, UploadedFile, UseInterceptors, BadRequestException } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { UserProfileService } from './user-profile.service';
 import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 
 @ApiTags('User Profile')
 @ApiBearerAuth()
@@ -30,5 +33,50 @@ export class UserProfileController {
   async resetProfile(@Req() req: any) {
     const userId = req.user.userId;
     return this.userProfileService.resetProfile(userId);
+  }
+
+  @Post('upload-image')
+  @ApiOperation({ summary: 'Upload user profile image' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
+  @UseInterceptors(FileInterceptor('file', {
+    storage: memoryStorage(),
+    fileFilter: (req, file, callback) => {
+      if (!file.originalname.match(/\.(jpg|jpeg|png|gif)$/)) {
+        return callback(new BadRequestException('Only image files are allowed!'), false);
+      }
+      callback(null, true);
+    },
+    limits: {
+      fileSize: 1024 * 1024 * 5, // 5MB
+    },
+  }))
+  async uploadProfileImage(
+    @Req() req: any,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
+    
+    const userId = req.user.userId;
+    return this.userProfileService.uploadProfileImage(userId, file);
+  }
+
+  @Post('delete-image')
+  @ApiOperation({ summary: 'Delete user profile image' })
+  async deleteProfileImage(@Req() req: any) {
+    const userId = req.user.userId;
+    return this.userProfileService.deleteProfileImage(userId);
   }
 }

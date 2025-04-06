@@ -36,6 +36,9 @@ export class UserProfile extends Document {
     
     @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User', default: null })
     created_by: string;
+
+    @Prop({ default: null })
+    profile_image: string;
 }
 
 export const UserProfileSchema = SchemaFactory.createForClass(UserProfile);

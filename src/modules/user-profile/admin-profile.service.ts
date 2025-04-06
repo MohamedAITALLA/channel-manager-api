@@ -4,12 +4,14 @@ import { Model } from 'mongoose';
 import { UserProfile } from './schemas/user-profile.schema';
 import { User } from '../auth/schemas/user.schema';
 import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
+import { UploadService } from 'src/common/services/upload.service';
 
 @Injectable()
 export class AdminProfileService {
     constructor(
         @InjectModel(UserProfile.name) private userProfileModel: Model<UserProfile>,
         @InjectModel(User.name) private userModel: Model<User>,
+        private readonly uploadService: UploadService,
     ) { }
 
     async getAllProfiles(adminId: string, page: number = 1, limit: number = 10) {
@@ -320,6 +322,165 @@ export class AdminProfileService {
             }
 
             throw new NotFoundException('Error resetting user profile');
+        }
+    }
+
+    async uploadUserProfileImage(adminId: string, userId: string, file: Express.Multer.File) {
+        try {
+            // Check if user exists and was created by this admin
+            const user = await this.userModel.findOne({ _id: userId, created_by: adminId }).exec();
+
+            if (!user) {
+                return {
+                    success: false,
+                    message: 'User not found or you do not have permission to update this user',
+                    timestamp: new Date().toISOString(),
+                    error: {
+                        code: 'USER_NOT_FOUND',
+                        details: 'The requested user does not exist or was not created by this admin'
+                    }
+                };
+            }
+
+            // Find the user profile
+            let profile = await this.userProfileModel.findOne({ user_id: userId }).exec();
+
+            if (!profile) {
+                // Create new profile if it doesn't exist
+                profile = new this.userProfileModel({
+                    user_id: userId,
+                    created_by: adminId,
+                });
+            }
+
+            // Delete old profile image if exists
+            if (profile.profile_image) {
+                this.uploadService.deleteProfileImage(profile.profile_image);
+            }
+
+            // Save new profile image
+            const imageUrl = await this.uploadService.saveProfileImage(file, userId);
+
+            // Update profile with new image URL
+            profile.profile_image = imageUrl;
+            await profile.save();
+
+            return {
+                success: true,
+                data: {
+                    profile_image: imageUrl,
+                    user_id: userId,
+                    updated_by: adminId,
+                },
+                message: 'Profile image uploaded successfully by admin',
+                timestamp: new Date().toISOString(),
+            };
+        } catch (error) {
+            if (error instanceof NotFoundException) {
+                throw error;
+            }
+
+            return {
+                success: false,
+                error: 'Failed to upload profile image',
+                details: {
+                    message: error.message,
+                    user_id: userId,
+                    admin_id: adminId,
+                },
+                timestamp: new Date().toISOString(),
+            };
+        }
+    }
+
+    async deleteUserProfileImage(adminId: string, userId: string) {
+        try {
+            // Check if user exists and was created by this admin
+            const user = await this.userModel.findOne({ _id: userId, created_by: adminId }).exec();
+
+            if (!user) {
+                return {
+                    success: false,
+                    message: 'User not found or you do not have permission to update this user',
+                    timestamp: new Date().toISOString(),
+                    error: {
+                        code: 'USER_NOT_FOUND',
+                        details: 'The requested user does not exist or was not created by this admin'
+                    }
+                };
+            }
+
+            // Find the user profile
+            const profile = await this.userProfileModel.findOne({ user_id: userId }).exec();
+
+            if (!profile) {
+                return {
+                    success: false,
+                    message: 'User profile not found',
+                    timestamp: new Date().toISOString(),
+                    error: {
+                        code: 'PROFILE_NOT_FOUND',
+                        details: 'No profile exists for this user'
+                    }
+                };
+            }
+
+            // If no profile image, nothing to delete
+            if (!profile.profile_image) {
+                return {
+                    success: false,
+                    message: 'No profile image to delete',
+                    timestamp: new Date().toISOString(),
+                    error: {
+                        code: 'NO_IMAGE',
+                        details: 'User does not have a profile image'
+                    }
+                };
+            }
+
+            // Store previous image URL for reference
+            const previousImage = profile.profile_image;
+
+            // Delete profile image
+            const deleted = this.uploadService.deleteProfileImage(profile.profile_image);
+
+            if (deleted) {
+                // Update profile to remove image reference
+                profile.profile_image = null!;
+                await profile.save();
+
+                return {
+                    success: true,
+                    data: {
+                        user_id: userId,
+                        deleted_by: adminId,
+                        previous_image: previousImage,
+                    },
+                    message: 'Profile image deleted successfully by admin',
+                    timestamp: new Date().toISOString(),
+                };
+            } else {
+                return {
+                    success: false,
+                    error: 'Failed to delete profile image',
+                    timestamp: new Date().toISOString(),
+                };
+            }
+        } catch (error) {
+            if (error instanceof NotFoundException) {
+                throw error;
+            }
+
+            return {
+                success: false,
+                error: 'Failed to delete profile image',
+                details: {
+                    message: error.message,
+                    user_id: userId,
+                    admin_id: adminId,
+                },
+                timestamp: new Date().toISOString(),
+            };
         }
     }
 }
