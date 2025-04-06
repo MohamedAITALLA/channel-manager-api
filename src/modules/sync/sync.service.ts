@@ -20,8 +20,12 @@ export class SyncService {
         private readonly notificationService: NotificationService,
     ) { }
 
-    @Cron(CronExpression.EVERY_QUARTER)
-    async handleCronSync15Min() {
+    /**
+     * Common method to handle cron sync jobs with different time intervals
+     * @param intervalMinutes The interval in minutes for this sync job
+     * @returns Results of the sync operation
+     */
+    private async handleCronSyncCommon(intervalMinutes: number) {
         try {
             // Find connections that need syncing based on their sync frequency
             const connections = await this.icalConnectionModel.find({
@@ -33,7 +37,7 @@ export class SyncService {
                         $expr: {
                             $gt: [
                                 { $subtract: [new Date(), '$last_synced'] },
-                                { $multiply: ['$sync_frequency', 15 * 1000] } // Convert minutes to milliseconds
+                                { $multiply: ['$sync_frequency', intervalMinutes * 60 * 1000] } // Convert minutes to milliseconds
                             ]
                         }
                     }
@@ -48,181 +52,57 @@ export class SyncService {
                 errors: []
             };
 
-            for (const connection of connections) {
-                try {
-                    results.connections_processed++;
-                    const syncResult = await this.syncConnection(connection);
-                    results.successful_syncs++;
-                    results.total_events_synced += syncResult.events_synced!;
-                } catch (error) {
-                    results.failed_syncs++;
-                    results.errors.push({
-                        property_id: connection.property_id.toString(),
-                        platform: connection.platform,
-                        error: error.message
-                    } as never);
-                }
+            // Process connections in batches to avoid overwhelming the system
+            const BATCH_SIZE = 10;
+            for (let i = 0; i < connections.length; i += BATCH_SIZE) {
+                const batch = connections.slice(i, i + BATCH_SIZE);
+                const batchPromises = batch.map(async (connection) => {
+                    try {
+                        results.connections_processed++;
+                        const syncResult = await this.syncConnection(connection);
+                        results.successful_syncs++;
+                        results.total_events_synced += syncResult.events_synced!;
+                        return { success: true, connection };
+                    } catch (error) {
+                        results.failed_syncs++;
+                        results.errors.push({
+                            property_id: connection.property_id.toString(),
+                            platform: connection.platform,
+                            error: error.message
+                        } as never);
+                        return { success: false, connection, error };
+                    }
+                });
+
+                await Promise.all(batchPromises);
             }
 
-            console.log(`Cron sync completed: ${results.successful_syncs}/${results.connections_processed} connections synced successfully`);
+            console.log(`Cron sync (${intervalMinutes}min) completed: ${results.successful_syncs}/${results.connections_processed} connections synced successfully`);
             return results;
         } catch (error) {
-            console.error('Error in cron sync job:', error);
+            console.error(`Error in ${intervalMinutes}min cron sync job:`, error);
             throw error;
         }
+    }
+
+    @Cron(CronExpression.EVERY_QUARTER)
+    async handleCronSync15Min() {
+        return this.handleCronSyncCommon(15);
     }
 
     @Cron(CronExpression.EVERY_30_MINUTES)
     async handleCronSync30Min() {
-        try {
-            // Find connections that need syncing based on their sync frequency
-            const connections = await this.icalConnectionModel.find({
-                status: ConnectionStatus.ACTIVE, is_active: true,
-                $or: [
-                    { last_synced: { $exists: false } },
-                    {
-                        $expr: {
-                            $gt: [
-                                { $subtract: [new Date(), '$last_synced'] },
-                                { $multiply: ['$sync_frequency', 30 * 1000] } // Convert minutes to milliseconds
-                            ]
-                        }
-                    }
-                ]
-            }).exec();
-
-            const results = {
-                connections_processed: 0,
-                successful_syncs: 0,
-                failed_syncs: 0,
-                total_events_synced: 0,
-                errors: []
-            };
-
-            for (const connection of connections) {
-                try {
-                    results.connections_processed++;
-                    const syncResult = await this.syncConnection(connection);
-                    results.successful_syncs++;
-                    results.total_events_synced += syncResult.events_synced!;
-                } catch (error) {
-                    results.failed_syncs++;
-                    results.errors.push({
-                        property_id: connection.property_id.toString(),
-                        platform: connection.platform,
-                        error: error.message
-                    } as never);
-                }
-            }
-
-            console.log(`Cron sync completed: ${results.successful_syncs}/${results.connections_processed} connections synced successfully`);
-            return results;
-        } catch (error) {
-            console.error('Error in cron sync job:', error);
-            throw error;
-        }
+        return this.handleCronSyncCommon(30);
     }
 
     @Cron('0 */45 * * * *')
     async handleCronSync45Min() {
-        try {
-            // Find connections that need syncing based on their sync frequency
-            const connections = await this.icalConnectionModel.find({
-                status: ConnectionStatus.ACTIVE, is_active: true,
-                $or: [
-                    { last_synced: { $exists: false } },
-                    {
-                        $expr: {
-                            $gt: [
-                                { $subtract: [new Date(), '$last_synced'] },
-                                { $multiply: ['$sync_frequency', 45 * 1000] } // Convert minutes to milliseconds
-                            ]
-                        }
-                    }
-                ]
-            }).exec();
-
-            const results = {
-                connections_processed: 0,
-                successful_syncs: 0,
-                failed_syncs: 0,
-                total_events_synced: 0,
-                errors: []
-            };
-
-            for (const connection of connections) {
-                try {
-                    results.connections_processed++;
-                    const syncResult = await this.syncConnection(connection);
-                    results.successful_syncs++;
-                    results.total_events_synced += syncResult.events_synced!;
-                } catch (error) {
-                    results.failed_syncs++;
-                    results.errors.push({
-                        property_id: connection.property_id.toString(),
-                        platform: connection.platform,
-                        error: error.message
-                    } as never);
-                }
-            }
-
-            console.log(`Cron sync completed: ${results.successful_syncs}/${results.connections_processed} connections synced successfully`);
-            return results;
-        } catch (error) {
-            console.error('Error in cron sync job:', error);
-            throw error;
-        }
+        return this.handleCronSyncCommon(45);
     }
 
     @Cron(CronExpression.EVERY_HOUR)
     async handleCronSyncHour() {
-        try {
-            // Find connections that need syncing based on their sync frequency
-            const connections = await this.icalConnectionModel.find({
-                status: ConnectionStatus.ACTIVE, is_active: true,
-                $or: [
-                    { last_synced: { $exists: false } },
-                    {
-                        $expr: {
-                            $gt: [
-                                { $subtract: [new Date(), '$last_synced'] },
-                                { $multiply: ['$sync_frequency', 60 * 1000] } // Convert minutes to milliseconds
-                            ]
-                        }
-                    }
-                ]
-            }).exec();
-
-            const results = {
-                connections_processed: 0,
-                successful_syncs: 0,
-                failed_syncs: 0,
-                total_events_synced: 0,
-                errors: []
-            };
-
-            for (const connection of connections) {
-                try {
-                    results.connections_processed++;
-                    const syncResult = await this.syncConnection(connection);
-                    results.successful_syncs++;
-                    results.total_events_synced += syncResult.events_synced!;
-                } catch (error) {
-                    results.failed_syncs++;
-                    results.errors.push({
-                        property_id: connection.property_id.toString(),
-                        platform: connection.platform,
-                        error: error.message
-                    } as never);
-                }
-            }
-
-            console.log(`Cron sync completed: ${results.successful_syncs}/${results.connections_processed} connections synced successfully`);
-            return results;
-        } catch (error) {
-            console.error('Error in cron sync job:', error);
-            throw error;
-        }
+        return this.handleCronSyncCommon(60);
     }
 
 
@@ -672,6 +552,11 @@ export class SyncService {
         return platforms;
     }
 
+    /**
+     * Synchronizes a single iCal connection by fetching and processing events
+     * @param connection The iCal connection to synchronize
+     * @returns Results of the sync operation
+     */
     async syncConnection(connection: ICalConnection): Promise<{
         events_synced?: number,
         events_created?: number,
@@ -682,9 +567,36 @@ export class SyncService {
         conflicts?: any[]
     }> {
         const startTime = Date.now();
+        let eventsObject;
+        
+        // Skip processing if connection is not active
+        if (!connection.is_active) {
+            throw new Error(`Connection is not active and cannot be synced`);
+        }
+        
+        // Skip processing if connection status is not ACTIVE
+        if (connection.status !== ConnectionStatus.ACTIVE) {
+            throw new Error(`Connection status is ${connection.status} and cannot be synced`);
+        }
+        
         try {
             // Fetch and parse iCal feed
-            const eventsObject = await this.icalService.fetchAndParseICalFeed(connection.ical_url, connection.platform);
+            try {
+                eventsObject = await this.icalService.fetchAndParseICalFeed(connection.ical_url, connection.platform);
+            } catch (fetchError) {
+                console.error(`Error fetching iCal feed for ${connection.platform}:`, fetchError.message);
+                // Update connection status with specific fetch error
+                await this.icalConnectionModel.findByIdAndUpdate(
+                    connection._id,
+                    {
+                        status: ConnectionStatus.ERROR,
+                        error_message: `Failed to fetch calendar: ${fetchError.message}`,
+                        last_error_time: new Date()
+                    }
+                ).exec();
+                throw new Error(`Failed to fetch calendar: ${fetchError.message}`);
+            }
+            
             const allEvents = eventsObject.data.events;
 
             // Filter out past events (end date < today)
@@ -695,7 +607,7 @@ export class SyncService {
                 new Date(event.end_date) >= today
             );
 
-            // const events = eventsObject.data.events
+            console.log(`Processing ${events.length} events for ${connection.platform} (filtered from ${allEvents.length} total events)`);
 
             // Get existing events for this connection
             const existingEvents = await this.calendarEventModel.find({
@@ -713,38 +625,49 @@ export class SyncService {
             const eventsToUpdate: Array<{ id: Types.ObjectId; update: Partial<CalendarEventData> }> = [];
             const processedUids = new Set<string>();
 
-            for (const eventData of events as CalendarEventData[]) {
-                processedUids.add(eventData.ical_uid);
+            // Process events in batches to avoid memory issues with large calendars
+            const BATCH_SIZE = 50;
+            for (let i = 0; i < events.length; i += BATCH_SIZE) {
+                const eventBatch = events.slice(i, i + BATCH_SIZE);
+                
+                for (const eventData of eventBatch as CalendarEventData[]) {
+                    // Skip events with missing required data
+                    if (!eventData.ical_uid || !eventData.start_date || !eventData.end_date) {
+                        console.warn(`Skipping event with missing data: ${JSON.stringify(eventData)}`);
+                        continue;
+                    }
+                    
+                    processedUids.add(eventData.ical_uid);
+                    const existingEvent = existingEventMap.get(eventData.ical_uid);
 
-                const existingEvent = existingEventMap.get(eventData.ical_uid);
-
-                if (!existingEvent) {
-                    // New event
-                    eventsToCreate.push({
-                        property_id: new Types.ObjectId(connection.property_id.toString()),
-                        connection_id: connection._id as Types.ObjectId,
-                        ...eventData,
-                    });
-                } else {
-                    // Check if event has changed
-                    const hasChanged =
-                        existingEvent.summary !== eventData.summary ||
-                        existingEvent.start_date.getTime() !== eventData.start_date.getTime() ||
-                        existingEvent.end_date.getTime() !== eventData.end_date.getTime() ||
-                        existingEvent.status?.toUpperCase() !== eventData.status?.toUpperCase();
-
-                    if (hasChanged) {
-                        eventsToUpdate.push({
-                            id: existingEvent._id as Types.ObjectId,
-                            update: {
-                                summary: eventData.summary,
-                                start_date: eventData.start_date,
-                                end_date: eventData.end_date,
-                                status: eventData.status.toLowerCase() as EventStatus,
-                                description: eventData.description,
-                                updated_at: new Date()
-                            }
+                    if (!existingEvent) {
+                        // New event
+                        eventsToCreate.push({
+                            property_id: new Types.ObjectId(connection.property_id.toString()),
+                            connection_id: connection._id as Types.ObjectId,
+                            ...eventData,
                         });
+                    } else {
+                        // Check if event has changed
+                        const hasChanged =
+                            existingEvent.summary !== eventData.summary ||
+                            existingEvent.start_date.getTime() !== eventData.start_date.getTime() ||
+                            existingEvent.end_date.getTime() !== eventData.end_date.getTime() ||
+                            existingEvent.status?.toUpperCase() !== eventData.status?.toUpperCase();
+
+                        if (hasChanged) {
+                            eventsToUpdate.push({
+                                id: existingEvent._id as Types.ObjectId,
+                                update: {
+                                    summary: eventData.summary,
+                                    start_date: eventData.start_date,
+                                    end_date: eventData.end_date,
+                                    status: eventData.status.toLowerCase() as EventStatus,
+                                    description: eventData.description,
+                                    updated_at: new Date()
+                                }
+                            });
+                        }
                     }
                 }
             }
@@ -757,13 +680,23 @@ export class SyncService {
                 }
             });
 
-            // Process batch operations
+            // Process database operations in batches
             if (eventsToCreate.length > 0) {
-                await this.calendarEventModel.insertMany(eventsToCreate);
+                try {
+                    // Insert in smaller batches to avoid MongoDB document size limits
+                    const CREATE_BATCH_SIZE = 100;
+                    for (let i = 0; i < eventsToCreate.length; i += CREATE_BATCH_SIZE) {
+                        const batch = eventsToCreate.slice(i, i + CREATE_BATCH_SIZE);
+                        await this.calendarEventModel.insertMany(batch, { ordered: false });
+                    }
 
-                // Create notifications for new bookings
-                for (const event of eventsToCreate) {
-                    if (event.event_type?.toUpperCase() === EventType.BOOKING.toUpperCase()) {
+                    // Create notifications for new bookings (limit to avoid flooding)
+                    const MAX_NOTIFICATIONS = 5;
+                    const bookingEvents = eventsToCreate
+                        .filter(event => event.event_type?.toUpperCase() === EventType.BOOKING.toUpperCase())
+                        .slice(0, MAX_NOTIFICATIONS);
+                        
+                    for (const event of bookingEvents) {
                         await this.notificationService.createNotification({
                             user_id: connection.user_id.toString(),
                             property_id: connection.property_id.toString(),
@@ -773,44 +706,78 @@ export class SyncService {
                             severity: NotificationSeverity.INFO,
                         });
                     }
+                    
+                    // If we limited notifications, add a summary notification
+                    if (bookingEvents.length < eventsToCreate.filter(e => e.event_type?.toUpperCase() === EventType.BOOKING.toUpperCase()).length) {
+                        const totalNewBookings = eventsToCreate.filter(e => e.event_type?.toUpperCase() === EventType.BOOKING.toUpperCase()).length;
+                        await this.notificationService.createNotification({
+                            user_id: connection.user_id.toString(),
+                            property_id: connection.property_id.toString(),
+                            type: NotificationType.NEW_BOOKING,
+                            title: `${totalNewBookings} new bookings from ${connection.platform}`,
+                            message: `${totalNewBookings} new bookings were imported from ${connection.platform}`,
+                            severity: NotificationSeverity.INFO,
+                        });
+                    }
+                } catch (dbError) {
+                    console.error(`Error creating events for ${connection.platform}:`, dbError.message);
+                    // Continue with the sync process despite this error
                 }
             }
 
-            for (const { id, update } of eventsToUpdate) {
-                await this.calendarEventModel.findByIdAndUpdate(id, update).exec();
+            // Update events in batches
+            if (eventsToUpdate.length > 0) {
+                try {
+                    const UPDATE_BATCH_SIZE = 50;
+                    for (let i = 0; i < eventsToUpdate.length; i += UPDATE_BATCH_SIZE) {
+                        const batch = eventsToUpdate.slice(i, i + UPDATE_BATCH_SIZE);
+                        await Promise.all(batch.map(({ id, update }) => 
+                            this.calendarEventModel.findByIdAndUpdate(id, update).exec()
+                        ));
+                    }
 
-                // Create notifications for modified bookings
-                await this.notificationService.createNotification({
-                    user_id: connection.user_id.toString(),
-                    property_id: connection.property_id.toString(),
-                    type: NotificationType.MODIFIED_BOOKING,
-                    title: `Booking modified on ${connection.platform}`,
-                    message: `Booking updated: ${update.summary || 'Untitled'} from ${update.start_date ? new Date(update.start_date).toLocaleDateString() : 'N/A'
-                        } to ${update.end_date ? new Date(update.end_date).toLocaleDateString() : 'N/A'
-                        }`,
-                    severity: NotificationSeverity.INFO,
-                });
+                    // Only create one notification for updates to avoid flooding
+                    if (eventsToUpdate.length > 0) {
+                        await this.notificationService.createNotification({
+                            user_id: connection.user_id.toString(),
+                            property_id: connection.property_id.toString(),
+                            type: NotificationType.MODIFIED_BOOKING,
+                            title: `${eventsToUpdate.length} booking(s) modified on ${connection.platform}`,
+                            message: `${eventsToUpdate.length} booking(s) have been updated from the ${connection.platform} calendar`,
+                            severity: NotificationSeverity.INFO,
+                        });
+                    }
+                } catch (dbError) {
+                    console.error(`Error updating events for ${connection.platform}:`, dbError.message);
+                    // Continue with the sync process despite this error
+                }
             }
 
+            // Cancel events in batches
             if (eventsToCancel.length > 0) {
-                await this.calendarEventModel.updateMany(
-                    { _id: { $in: eventsToCancel } },
-                    {
-                        status: EventStatus.CANCELLED,
-                        updated_at: new Date(),
-                        cancelled_at: new Date()
-                    }
-                ).exec();
+                try {
+                    await this.calendarEventModel.updateMany(
+                        { _id: { $in: eventsToCancel } },
+                        {
+                            status: EventStatus.CANCELLED,
+                            updated_at: new Date(),
+                            cancelled_at: new Date()
+                        }
+                    ).exec();
 
-                // Create notifications for cancelled bookings
-                await this.notificationService.createNotification({
-                    user_id: connection.user_id.toString(),
-                    property_id: connection.property_id.toString(),
-                    type: NotificationType.CANCELLED_BOOKING,
-                    title: `${eventsToCancel.length} booking(s) cancelled on ${connection.platform}`,
-                    message: `${eventsToCancel.length} booking(s) have been removed from the ${connection.platform} calendar`,
-                    severity: NotificationSeverity.INFO,
-                });
+                    // Create notifications for cancelled bookings
+                    await this.notificationService.createNotification({
+                        user_id: connection.user_id.toString(),
+                        property_id: connection.property_id.toString(),
+                        type: NotificationType.CANCELLED_BOOKING,
+                        title: `${eventsToCancel.length} booking(s) cancelled on ${connection.platform}`,
+                        message: `${eventsToCancel.length} booking(s) have been removed from the ${connection.platform} calendar`,
+                        severity: NotificationSeverity.INFO,
+                    });
+                } catch (dbError) {
+                    console.error(`Error cancelling events for ${connection.platform}:`, dbError.message);
+                    // Continue with the sync process despite this error
+                }
             }
 
             // Update connection status
@@ -825,7 +792,14 @@ export class SyncService {
             ).exec();
 
             // Detect conflicts
-            const conflictsData = await this.conflictDetectorService.detectAllConflictsForProperty(connection.property_id.toString());
+            let conflictsData;
+            try {
+                conflictsData = await this.conflictDetectorService.detectAllConflictsForProperty(connection.property_id.toString());
+            } catch (conflictError) {
+                console.error(`Error detecting conflicts for ${connection.platform}:`, conflictError.message);
+                // Don't fail the sync if conflict detection fails
+                conflictsData = { data: [] };
+            }
 
             const syncDuration = Date.now() - startTime;
             return {
@@ -837,15 +811,23 @@ export class SyncService {
                 sync_duration_ms: syncDuration
             };
         } catch (error) {
+            const syncDuration = Date.now() - startTime;
+            console.error(`Sync failed for ${connection.platform} after ${syncDuration}ms:`, error.message);
+            
             // Update connection status
-            await this.icalConnectionModel.findByIdAndUpdate(
-                connection._id,
-                {
-                    status: ConnectionStatus.ERROR,
-                    error_message: error.message,
-                    last_error_time: new Date()
-                }
-            ).exec();
+            try {
+                await this.icalConnectionModel.findByIdAndUpdate(
+                    connection._id,
+                    {
+                        status: ConnectionStatus.ERROR,
+                        error_message: error.message,
+                        last_error_time: new Date(),
+                        sync_duration_ms: syncDuration
+                    }
+                ).exec();
+            } catch (updateError) {
+                console.error(`Failed to update connection status for ${connection.platform}:`, updateError.message);
+            }
 
             throw error;
         }

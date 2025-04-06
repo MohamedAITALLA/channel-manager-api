@@ -5,7 +5,7 @@ import { ICalConnection } from './schemas/ical-connection.schema';
 import { CreateICalConnectionDto } from './dto/create-ical-connection.dto';
 import { UpdateICalConnectionDto } from './dto/update-ical-connection.dto';
 import { IcalService } from './ical.service';
-import { ConnectionStatus, NotificationSeverity, NotificationType } from '../../common/types';
+import { ConnectionStatus, EventStatus, NotificationSeverity, NotificationType } from '../../common/types';
 import { CalendarEvent } from '../calendar/schemas/calendar-event.schema';
 import { NotificationService } from '../notification/notification.service';
 import { ConflictDetectorService } from '../calendar/conflict-detector.service';
@@ -192,7 +192,7 @@ export class ICalConnectionService {
     propertyId: string,
     connectionId: string,
     preserve_history: boolean = true,
-    eventAction: 'delete' | 'deactivate' | 'convert' | 'keep' = 'keep'
+    eventAction: 'delete' | 'deactivate' | 'convert' | 'keep' = 'deactivate'
   ) {
     let connection;
     let actionTaken;
@@ -212,7 +212,11 @@ export class ICalConnectionService {
       connection = await this.icalConnectionModel
         .findOneAndUpdate(
           { _id: connectionId, property_id: propertyId },
-          { is_active: false },
+          { 
+            is_active: false,
+            status: ConnectionStatus.INACTIVE,
+            updated_at: new Date()
+          },
           { new: true }
         )
         .exec();
@@ -234,11 +238,12 @@ export class ICalConnectionService {
       preserve_history
     );
 
-    // Clean up conflicts
+    // Clean up conflicts using the affected event IDs
     const conflictDetectorService = this.moduleRef.get(ConflictDetectorService, { strict: false });
     const conflictsResult = await conflictDetectorService.cleanupConflictsAfterConnectionRemoval(
       propertyId,
-      connectionId
+      connectionId,
+      eventsResult.affected_event_ids || []
     );
 
     // Notify the user
@@ -290,13 +295,13 @@ export class ICalConnectionService {
   }
 
 
-  // Add a new method to handle associated events
+  // Handle associated events when a connection is removed or deactivated
   private async handleAssociatedEvents(
     propertyId: string,
     connectionId: string,
     action: 'delete' | 'deactivate' | 'convert' | 'keep',
     preserveHistory: boolean
-  ): Promise<{ count: number; message: string }> {
+  ): Promise<{ count: number; message: string; affected_events?: any[]; affected_event_ids?: any[] }> {
     // Inject CalendarEvent model
     const calendarEventModel = this.moduleRef.get(getModelToken(CalendarEvent.name), { strict: false });
 
@@ -307,42 +312,68 @@ export class ICalConnectionService {
       is_active: true
     };
 
-    const eventsCount = await calendarEventModel.countDocuments(query).exec();
+    // Get the actual events for more detailed processing
+    const events = await calendarEventModel.find(query).exec();
+    const eventsCount = events.length;
 
     if (eventsCount === 0) {
       return { count: 0, message: 'No events were associated with this connection.' };
     }
 
+    // Store affected event IDs for conflict detection
+    const affectedEventIds = events.map(event => event._id);
+    const affectedEvents = events.map(event => ({
+      id: event._id,
+      summary: event.summary,
+      start_date: event.start_date,
+      end_date: event.end_date,
+      status: event.status
+    }));
+
     switch (action) {
       case 'delete':
         if (preserveHistory) {
-          // Soft delete - mark as inactive
+          // Soft delete - mark as inactive and update status to cancelled
           await calendarEventModel.updateMany(
             query,
-            { is_active: false, updated_at: new Date() }
+            { 
+              is_active: false, 
+              status: EventStatus.CANCELLED,
+              updated_at: new Date() 
+            }
           ).exec();
           return {
             count: eventsCount,
-            message: `${eventsCount} associated events have been deactivated.`
+            message: `${eventsCount} associated events have been deactivated and marked as cancelled.`,
+            affected_events: affectedEvents,
+            affected_event_ids: affectedEventIds
           };
         } else {
           // Hard delete
           await calendarEventModel.deleteMany(query).exec();
           return {
             count: eventsCount,
-            message: `${eventsCount} associated events have been permanently deleted.`
+            message: `${eventsCount} associated events have been permanently deleted.`,
+            affected_events: affectedEvents,
+            affected_event_ids: affectedEventIds
           };
         }
 
       case 'deactivate':
-        // Just mark as inactive
+        // Mark as inactive and update status to cancelled
         await calendarEventModel.updateMany(
           query,
-          { is_active: false, updated_at: new Date() }
+          { 
+            is_active: false, 
+            status: EventStatus.CANCELLED,
+            updated_at: new Date() 
+          }
         ).exec();
         return {
           count: eventsCount,
-          message: `${eventsCount} associated events have been deactivated.`
+          message: `${eventsCount} associated events have been deactivated and marked as cancelled.`,
+          affected_events: affectedEvents,
+          affected_event_ids: affectedEventIds
         };
 
       case 'convert':
@@ -358,7 +389,9 @@ export class ICalConnectionService {
         ).exec();
         return {
           count: eventsCount,
-          message: `${eventsCount} associated events have been converted to manual events.`
+          message: `${eventsCount} associated events have been converted to manual events.`,
+          affected_events: affectedEvents,
+          affected_event_ids: affectedEventIds
         };
 
       case 'keep':
@@ -366,7 +399,9 @@ export class ICalConnectionService {
         // Do nothing to the events
         return {
           count: eventsCount,
-          message: `${eventsCount} associated events remain unchanged. These events may become stale without their connection.`
+          message: `${eventsCount} associated events remain unchanged. These events may become stale without their connection.`,
+          affected_events: affectedEvents,
+          affected_event_ids: affectedEventIds
         };
     }
   }

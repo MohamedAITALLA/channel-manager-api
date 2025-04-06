@@ -262,16 +262,21 @@ async detectConflictsForEvent(event: CalendarEvent): Promise<any> {
 
   // src/modules/calendar/conflict-detector.service.ts
 
-async cleanupConflictsAfterConnectionRemoval(propertyId: string, connectionId: string): Promise<any> {
+async cleanupConflictsAfterConnectionRemoval(propertyId: string, connectionId: string, affectedEventIds?: any[]): Promise<any> {
   try {
-    // First, get all events associated with this connection
+    // Get all events associated with this connection if not provided
     const calendarEventModel = this.moduleRef.get(getModelToken(CalendarEvent.name), { strict: false });
-    const eventsFromConnection = await calendarEventModel.find({
-      property_id: propertyId,
-      connection_id: connectionId
-    }).select('_id').exec();
+    let eventIds = affectedEventIds || [];
     
-    const eventIds = eventsFromConnection.map(event => event._id);
+    if (!eventIds || eventIds.length === 0) {
+      const eventsFromConnection = await calendarEventModel.find({
+        property_id: propertyId,
+        connection_id: connectionId,
+        is_active: true
+      }).select('_id').exec();
+      
+      eventIds = eventsFromConnection.map(event => event._id);
+    }
     
     if (eventIds.length === 0) {
       return {
@@ -296,31 +301,62 @@ async cleanupConflictsAfterConnectionRemoval(propertyId: string, connectionId: s
     }
     
     // For each conflict, we need to decide what to do:
-    // 1. If the conflict only involves events from this connection, delete it
+    // 1. If the conflict only involves events from this connection, mark it as resolved
     // 2. If the conflict involves other events too, recalculate it
     
-    let deletedCount = 0;
+    let resolvedCount = 0;
     let recalculatedCount = 0;
+    let deletedCount = 0;
     
     for (const conflict of conflicts) {
       // Check if all events in this conflict are from the removed connection
       const otherEventIds = conflict.event_ids.filter(
-        id => !eventIds.some(eventId => eventId.equals(id))
+        id => !eventIds.some(eventId => eventId.toString() === id.toString())
       );
       
       if (otherEventIds.length === 0) {
-        // All events in this conflict are from the removed connection, delete it
-        await this.conflictModel.deleteOne({ _id: conflict._id }).exec();
-        deletedCount++;
+        // All events in this conflict are from the removed connection, mark as resolved
+        await this.conflictModel.updateOne(
+          { _id: conflict._id },
+          { 
+            status: ConflictStatus.RESOLVED,
+            description: `${conflict.description} (automatically resolved - connection deactivated)`,
+            updated_at: new Date()
+          }
+        ).exec();
+        resolvedCount++;
       } else if (otherEventIds.length === 1) {
         // Only one event remains, no conflict possible
-        await this.conflictModel.deleteOne({ _id: conflict._id }).exec();
-        deletedCount++;
+        await this.conflictModel.updateOne(
+          { _id: conflict._id },
+          { 
+            status: ConflictStatus.RESOLVED,
+            description: `${conflict.description} (automatically resolved - only one active event remains)`,
+            updated_at: new Date()
+          }
+        ).exec();
+        resolvedCount++;
       } else {
         // Recalculate the conflict with remaining events
         const remainingEvents = await calendarEventModel.find({
-          _id: { $in: otherEventIds }
+          _id: { $in: otherEventIds },
+          is_active: true,
+          status: { $ne: EventStatus.CANCELLED }
         }).exec();
+        
+        if (remainingEvents.length <= 1) {
+          // No conflict possible with 0 or 1 active events
+          await this.conflictModel.updateOne(
+            { _id: conflict._id },
+            { 
+              status: ConflictStatus.RESOLVED,
+              description: `${conflict.description} (automatically resolved - insufficient active events)`,
+              updated_at: new Date()
+            }
+          ).exec();
+          resolvedCount++;
+          continue;
+        }
         
         // Check if there's still a conflict
         const hasOverlap = this.checkForOverlap(remainingEvents);
@@ -330,39 +366,52 @@ async cleanupConflictsAfterConnectionRemoval(propertyId: string, connectionId: s
           await this.conflictModel.updateOne(
             { _id: conflict._id },
             {
-              event_ids: otherEventIds,
+              event_ids: remainingEvents.map(e => e._id),
               start_date: this.getEarliestDate(remainingEvents),
               end_date: this.getLatestDate(remainingEvents),
-              description: `Booking conflict detected between ${otherEventIds.length} events (recalculated after connection removal)`
+              description: `Booking conflict detected between ${remainingEvents.length} events (recalculated after connection deactivation)`,
+              updated_at: new Date()
             }
           ).exec();
           recalculatedCount++;
         } else {
           // No conflict anymore
-          await this.conflictModel.deleteOne({ _id: conflict._id }).exec();
-          deletedCount++;
+          await this.conflictModel.updateOne(
+            { _id: conflict._id },
+            { 
+              status: ConflictStatus.RESOLVED,
+              description: `${conflict.description} (automatically resolved - no overlap after recalculation)`,
+              updated_at: new Date()
+            }
+          ).exec();
+          resolvedCount++;
         }
       }
     }
     
     return {
       success: true,
-      message: `Cleaned up conflicts after connection removal: ${deletedCount} deleted, ${recalculatedCount} recalculated`,
+      message: `Cleaned up conflicts after connection deactivation: ${resolvedCount} resolved, ${recalculatedCount} recalculated, ${deletedCount} deleted`,
       affected_conflicts: conflicts.length,
-      deleted: deletedCount,
-      recalculated: recalculatedCount
+      resolved_conflicts: resolvedCount,
+      recalculated_conflicts: recalculatedCount,
+      deleted_conflicts: deletedCount
     };
   } catch (error) {
+    console.error('Error cleaning up conflicts after connection removal:', error);
     return {
       success: false,
-      error: `Failed to clean up conflicts: ${error.message}`,
-      timestamp: new Date().toISOString()
+      message: `Error cleaning up conflicts: ${error.message}`,
+      affected_conflicts: 0
     };
   }
 }
 
 // Helper method to check for overlaps in a set of events
 private checkForOverlap(events: CalendarEvent[]): boolean {
+  if (!events || events.length <= 1) return false;
+
+    // Check each pair of events for overlap
   const activeEvents = events.filter(e => e.is_active !== false);
   for (let i = 0; i < activeEvents.length; i++) {
     for (let j = i + 1; j < events.length; j++) {
