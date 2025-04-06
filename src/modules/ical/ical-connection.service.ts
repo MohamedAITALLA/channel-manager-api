@@ -243,7 +243,7 @@ export class ICalConnectionService {
     const conflictsResult = await conflictDetectorService.cleanupConflictsAfterConnectionRemoval(
       propertyId,
       connectionId,
-      eventsResult.affected_event_ids || []
+      eventsResult.data.affected_event_ids || []
     );
 
     // Notify the user
@@ -251,7 +251,7 @@ export class ICalConnectionService {
       propertyId,
       connection,
       actionTaken,
-      eventsResult.count,
+      eventsResult.data.count,
       eventAction
     );
 
@@ -261,7 +261,7 @@ export class ICalConnectionService {
       connection,
       actionTaken,
       eventAction,
-      eventsResult.count
+      eventsResult.data.count
     );
 
     return {
@@ -274,7 +274,7 @@ export class ICalConnectionService {
         preserve_history,
         action: actionTaken,
         events_action: eventAction,
-        events_affected: eventsResult.count,
+        events_affected: eventsResult.data.count,
         conflicts_processed: conflictsResult.affected_conflicts,
       },
       message: `iCal connection for ${connection.platform} has been ${actionTaken} successfully. ${eventsResult.message}`,
@@ -301,7 +301,7 @@ export class ICalConnectionService {
     connectionId: string,
     action: 'delete' | 'deactivate' | 'convert' | 'keep',
     preserveHistory: boolean
-  ): Promise<{ count: number; message: string; affected_events?: any[]; affected_event_ids?: any[] }> {
+  ): Promise<{ success: boolean; data: { count: number; affected_events?: any[]; affected_event_ids?: any[] }; message: string; timestamp: string }> {
     // Inject CalendarEvent model
     const calendarEventModel = this.moduleRef.get(getModelToken(CalendarEvent.name), { strict: false });
 
@@ -317,7 +317,16 @@ export class ICalConnectionService {
     const eventsCount = events.length;
 
     if (eventsCount === 0) {
-      return { count: 0, message: 'No events were associated with this connection.' };
+      return { 
+        success: true, 
+        data: { 
+          count: 0,
+          affected_events: [],
+          affected_event_ids: []
+        },
+        message: 'No events were associated with this connection.',
+        timestamp: new Date().toISOString()
+      };
     }
 
     // Store affected event IDs for conflict detection
@@ -330,6 +339,8 @@ export class ICalConnectionService {
       status: event.status
     }));
 
+    let message = '';
+    
     switch (action) {
       case 'delete':
         if (preserveHistory) {
@@ -342,22 +353,13 @@ export class ICalConnectionService {
               updated_at: new Date() 
             }
           ).exec();
-          return {
-            count: eventsCount,
-            message: `${eventsCount} associated events have been deactivated and marked as cancelled.`,
-            affected_events: affectedEvents,
-            affected_event_ids: affectedEventIds
-          };
+          message = `${eventsCount} associated events have been deactivated and marked as cancelled.`;
         } else {
           // Hard delete
           await calendarEventModel.deleteMany(query).exec();
-          return {
-            count: eventsCount,
-            message: `${eventsCount} associated events have been permanently deleted.`,
-            affected_events: affectedEvents,
-            affected_event_ids: affectedEventIds
-          };
+          message = `${eventsCount} associated events have been permanently deleted.`;
         }
+        break;
 
       case 'deactivate':
         // Mark as inactive and update status to cancelled
@@ -369,12 +371,8 @@ export class ICalConnectionService {
             updated_at: new Date() 
           }
         ).exec();
-        return {
-          count: eventsCount,
-          message: `${eventsCount} associated events have been deactivated and marked as cancelled.`,
-          affected_events: affectedEvents,
-          affected_event_ids: affectedEventIds
-        };
+        message = `${eventsCount} associated events have been deactivated and marked as cancelled.`;
+        break;
 
       case 'convert':
         // Convert to manual events by removing connection_id and setting platform to 'manual'
@@ -387,23 +385,26 @@ export class ICalConnectionService {
             ical_uid: null // Remove the ical_uid to prevent conflicts with future syncs
           }
         ).exec();
-        return {
-          count: eventsCount,
-          message: `${eventsCount} associated events have been converted to manual events.`,
-          affected_events: affectedEvents,
-          affected_event_ids: affectedEventIds
-        };
+        message = `${eventsCount} associated events have been converted to manual events.`;
+        break;
 
       case 'keep':
       default:
         // Do nothing to the events
-        return {
-          count: eventsCount,
-          message: `${eventsCount} associated events remain unchanged. These events may become stale without their connection.`,
-          affected_events: affectedEvents,
-          affected_event_ids: affectedEventIds
-        };
+        message = `${eventsCount} associated events remain unchanged. These events may become stale without their connection.`;
+        break;
     }
+    
+    return {
+      success: true,
+      data: {
+        count: eventsCount,
+        affected_events: affectedEvents,
+        affected_event_ids: affectedEventIds
+      },
+      message,
+      timestamp: new Date().toISOString()
+    };
   }
 
 
