@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { PropertyController } from './property.controller';
 import { PropertyService } from './property.service';
+import { AdminPropertyController } from './admin-property.controller';
+import { AdminPropertyService } from './admin-property.service';
 import { Property, PropertySchema } from './schemas/property.schema';
 import { UploadService } from '../../common/services/upload.service';
 import { MulterModule } from '@nestjs/platform-express';
@@ -15,8 +17,8 @@ import { MulterModule } from '@nestjs/platform-express';
       dest: './uploads',
     }),
   ],
-  controllers: [PropertyController],
-  providers: [PropertyService, UploadService],
-  exports: [PropertyService],
+  controllers: [PropertyController, AdminPropertyController],
+  providers: [PropertyService, AdminPropertyService, UploadService],
+  exports: [PropertyService, AdminPropertyService],
 })
 export class PropertyModule {}

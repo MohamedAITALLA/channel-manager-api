@@ -3,6 +3,8 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AnalyticsController } from './analytics.controller';
 import { AnalyticsService } from './analytics.service';
+import { AdminAnalyticsController } from './admin-analytics.controller';
+import { AdminAnalyticsService } from './admin-analytics.service';
 import { Property, PropertySchema } from '../property/schemas/property.schema';
 import { CalendarEvent, CalendarEventSchema } from '../calendar/schemas/calendar-event.schema';
 import { ICalConnection, ICalConnectionSchema } from '../ical/schemas/ical-connection.schema';
@@ -19,8 +21,8 @@ import { Conflict, ConflictSchema } from '../calendar/schemas/conflict.schema';
       { name: Conflict.name, schema: ConflictSchema },
     ]),
   ],
-  controllers: [AnalyticsController],
-  providers: [AnalyticsService],
-  exports: [AnalyticsService],
+  controllers: [AnalyticsController, AdminAnalyticsController],
+  providers: [AnalyticsService, AdminAnalyticsService],
+  exports: [AnalyticsService, AdminAnalyticsService],
 })
 export class AnalyticsModule {}

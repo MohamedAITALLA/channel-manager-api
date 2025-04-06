@@ -3,6 +3,8 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AuditService } from './audit.service';
+import { AdminAuditService } from './admin-audit.service';
+import { AdminAuditController } from './admin-audit.controller';
 import { AuditEntry, AuditEntrySchema } from './schemas/audit-entry.schema';
 
 @Module({
@@ -11,7 +13,8 @@ import { AuditEntry, AuditEntrySchema } from './schemas/audit-entry.schema';
       { name: AuditEntry.name, schema: AuditEntrySchema },
     ]),
   ],
-  providers: [AuditService],
-  exports: [AuditService],
+  controllers: [AdminAuditController],
+  providers: [AuditService, AdminAuditService],
+  exports: [AuditService, AdminAuditService],
 })
 export class AuditModule {}
