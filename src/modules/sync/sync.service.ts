@@ -25,7 +25,7 @@ export class SyncService {
         try {
             // Find connections that need syncing based on their sync frequency
             const connections = await this.icalConnectionModel.find({
-                status: ConnectionStatus.ACTIVE, 
+                status: ConnectionStatus.ACTIVE,
                 is_active: true,
                 $or: [
                     { last_synced: { $exists: false } },
@@ -672,7 +672,7 @@ export class SyncService {
         return platforms;
     }
 
-    private async syncConnection(connection: ICalConnection): Promise<{
+    async syncConnection(connection: ICalConnection): Promise<{
         events_synced?: number,
         events_created?: number,
         events_updated?: number,
