@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { createHash } from 'crypto';
-import { writeFile, existsSync, unlinkSync, mkdirSync } from 'fs-extra';
-import { join } from 'path';
+import { writeFile, existsSync, unlinkSync, mkdirSync, createWriteStream } from 'fs-extra';
+import path, { join } from 'path';
 import { put, del } from '@vercel/blob'; // Make sure to install @vercel/blob
 
 @Injectable()
@@ -15,7 +15,7 @@ export class UploadService {
   constructor() {
     // Check if running in Vercel
     this.isVercel = process.env.VERCEL === '1';
-    
+    console.log(`UploadService initialized. Running in Vercel: ${this.isVercel}`);
     // Set base URL for generating image URLs
     this.baseUrl = process.env.BASE_URL || 'http://localhost:3000';
     
@@ -37,238 +37,393 @@ export class UploadService {
       mkdirSync(directory, { recursive: true });
     }
   }
-
-  async savePropertyImage(file: Express.Multer.File, propertyId: string): Promise<string> {
-    // Extract the original file extension
-    const originalName = file.originalname;
-    console.log("ORIGINAL FILE NAME ====> ", originalName);
-  
-    const fileExtension = originalName.substring(originalName.lastIndexOf('.') || 0);
-    console.log("FILE EXTENSION ====> ", fileExtension);
-  
-    // Generate a unique ID for the filename
-    const fileId = createHash('md5').update(Date.now().toString()).digest('hex');
-    console.log("UNIQUE ID ====> ", fileId);
-  
-    // Create filename with original extension
-    const filename = `${fileId}${fileExtension}`;
-    console.log("FILE NAME ====> ", filename);
-    
-    // Determine the file data source (buffer or path)
-    let fileData;
-    if (file.buffer) {
-      console.log("Using file.buffer");
-      fileData = file.buffer;
-    } else if (file.path) {
-      console.log("Using file from disk path:", file.path);
-      // If using disk storage, read from the temp path
-      const fs = require('fs');
-      fileData = fs.readFileSync(file.path);
-    } else {
-      throw new Error("No file data available in either buffer or path");
+/**
+   * Saves a profile image to either local filesystem or Vercel Blob Storage
+   * @param file The uploaded file
+   * @param userId The user ID to associate with the image
+   * @returns Promise<string> The URL or path to the saved image
+   */
+async saveProfileImage(file: Express.Multer.File, userId: string): Promise<string> {
+  try {
+    if (!file) {
+      throw new Error('No file provided');
     }
-  
-    // Relative path for the image
-    const relativePath = `/property-images/${propertyId}/${filename}`;
-    
+
+    console.log(`Saving profile image for user ${userId}`);
+
     if (this.isVercel) {
-      // In Vercel, use Blob Storage
-      console.log("Using Vercel Blob Storage");
-      // The path in Vercel Blob should not start with a slash
-      const blobPath = `property-images/${propertyId}/${filename}`;
+      // For Vercel Blob Storage
+      console.log("Saving to Vercel Blob Storage");
       
-      try {
-        const blob = await put(blobPath, fileData, {
-          contentType: file.mimetype,
-          access: 'public',
-        });
-        
-        console.log("Image uploaded to Vercel Blob:", blob.url);
-        return blob.url;
-      } catch (error) {
-        console.error("Error uploading to Vercel Blob:", error);
-        throw error;
-      }
+      // Generate a unique filename
+      const fileExtension = path.extname(file.originalname);
+      const uniqueFilename = `${uuidv4()}${fileExtension}`;
+      
+      // Define the blob path
+      const blobPath = `profile-images/${userId}/${uniqueFilename}`;
+      
+      // Upload to Vercel Blob
+      const blob = await put(blobPath, file.buffer, {
+        access: 'public',
+        contentType: file.mimetype
+      });
+      
+      console.log(`Successfully uploaded to Vercel Blob: ${blob.url}`);
+      return blob.url;
     } else {
-      // In local development, save to filesystem
-      console.log("Using local filesystem storage");
-      const uploadDir = join(this.propertyImagesDir, propertyId);
-      console.log("UPLOAD DIR ====> ", uploadDir);
+      // For local filesystem
+      console.log("Saving to local filesystem");
       
+      // Ensure the directory exists
+      const uploadDir = join(process.cwd(), 'uploads', 'profile-images', userId);
       if (!existsSync(uploadDir)) {
         mkdirSync(uploadDir, { recursive: true });
-        console.log("UPLOAD DIR created ====> ", existsSync(uploadDir));
       }
       
-      const filepath = join(uploadDir, filename);
-      console.log("FILE PATH ====> ", filepath);
+      // Generate a unique filename
+      const fileExtension = path.extname(file.originalname);
+      const uniqueFilename = `${uuidv4()}${fileExtension}`;
+      const filePath = join(uploadDir, uniqueFilename);
       
-      // Write file to disk
-      await writeFile(filepath, fileData);
-      console.log("RELATIVE PATH ====> ", relativePath);
-      
-      return relativePath;
-    }
-  }
-
-  async deletePropertyImage(imageUrl: string): Promise<boolean> {
-    try {
-      if (this.isVercel) {
-        // For Vercel Blob Storage
-        console.log("Deleting from Vercel Blob Storage:", imageUrl);
+      // Write the file
+      return new Promise((resolve, reject) => {
+        const writeStream = createWriteStream(filePath);
+        writeStream.write(file.buffer);
+        writeStream.end();
         
-        // Check if it's a full URL or just a path
-        if (imageUrl.startsWith('http')) {
-          // It's a full URL, extract the path part
-          const url = new URL(imageUrl);
-          // Remove the leading slash if present
-          const pathname = url.pathname.startsWith('/') ? url.pathname.substring(1) : url.pathname;
-          await del(pathname);
-        } else {
-          // It's a relative path, remove the leading slash if present
-          const blobPath = imageUrl.startsWith('/') ? imageUrl.substring(1) : imageUrl;
-          await del(blobPath);
-        }
-        
-        console.log("Successfully deleted image from Vercel Blob");
-        return true;
-      } else {
-        // For local filesystem
-        // imageUrl format: /property-images/{propertyId}/{filename}
-        // Need to map this to the physical path: uploads/property-images/{propertyId}/{filename}
-        
-        // Convert URL path to filesystem path
-        const imagePath = join(process.cwd(), 'uploads', imageUrl.substring(1));
-        console.log("Attempting to delete image at:", imagePath);
-        
-        if (existsSync(imagePath)) {
-          unlinkSync(imagePath);
-          console.log("Successfully deleted image");
-          return true;
-        }
-        console.log("Image file not found");
-        return false;
-      }
-    } catch (error) {
-      console.error(`Failed to delete image: ${error.message}`);
-      return false;
-    }
-  }
-
-  async saveProfileImage(file: Express.Multer.File, userId: string): Promise<string> {
-    // Extract the original file extension
-    const originalName = file.originalname;
-    console.log("ORIGINAL FILE NAME ====> ", originalName);
-
-    const fileExtension = originalName.substring(originalName.lastIndexOf('.') || 0);
-    console.log("FILE EXTENSION ====> ", fileExtension);
-
-    // Generate a unique ID for the filename
-    const fileId = createHash('md5').update(Date.now().toString()).digest('hex');
-    console.log("UNIQUE ID ====> ", fileId);
-
-    // Create filename with original extension
-    const filename = `${fileId}${fileExtension}`;
-    console.log("FILE NAME ====> ", filename);
-    
-    // Determine the file data source (buffer or path)
-    let fileData;
-    if (file.buffer) {
-      console.log("Using file.buffer");
-      fileData = file.buffer;
-    } else if (file.path) {
-      console.log("Using file from disk path:", file.path);
-      // If using disk storage, read from the temp path
-      const fs = require('fs');
-      fileData = fs.readFileSync(file.path);
-    } else {
-      throw new Error("No file data available in either buffer or path");
-    }
-
-    // Relative path for the image
-    const relativePath = `/profile-images/${filename}`;
-    
-    if (this.isVercel) {
-      // In Vercel, use Blob Storage
-      console.log("Using Vercel Blob Storage");
-      // The path in Vercel Blob should not start with a slash
-      const blobPath = `profile-images/${filename}`;
-      
-      try {
-        const blob = await put(blobPath, fileData, {
-          contentType: file.mimetype,
-          access: 'public',
+        writeStream.on('finish', () => {
+          console.log(`Successfully saved file to: ${filePath}`);
+          // Return a URL-like path that can be used in the application
+          const relativePath = `profile-images/${userId}/${uniqueFilename}`;
+          resolve(relativePath);
         });
         
-        console.log("Image uploaded to Vercel Blob:", blob.url);
-        return blob.url;
-      } catch (error) {
-        console.error("Error uploading to Vercel Blob:", error);
-        throw error;
-      }
-    } else {
-      // In local development, save to filesystem
-      console.log("Using local filesystem storage");
-      const uploadDir = this.profileImagesDir;
-      console.log("UPLOAD DIR ====> ", uploadDir);
-      
-      if (!existsSync(uploadDir)) {
-        mkdirSync(uploadDir, { recursive: true });
-        console.log("UPLOAD DIR created ====> ", existsSync(uploadDir));
-      }
-      
-      const filepath = join(uploadDir, filename);
-      console.log("FILE PATH ====> ", filepath);
-      
-      // Write file to disk
-      await writeFile(filepath, fileData);
-      console.log("RELATIVE PATH ====> ", relativePath);
-      
-      return relativePath;
+        writeStream.on('error', (error) => {
+          console.error(`Error saving file: ${error.message}`);
+          reject(error);
+        });
+      });
     }
-  }
-
-  async deleteProfileImage(imageUrl: string): Promise<boolean> {
-    try {
-      if (this.isVercel) {
-        // For Vercel Blob Storage
-        console.log("Deleting from Vercel Blob Storage:", imageUrl);
-        
-        // Check if it's a full URL or just a path
-        if (imageUrl.startsWith('http')) {
-          // It's a full URL, extract the path part
-          const url = new URL(imageUrl);
-          // Remove the leading slash if present
-          const pathname = url.pathname.startsWith('/') ? url.pathname.substring(1) : url.pathname;
-          await del(pathname);
-        } else {
-          // It's a relative path, remove the leading slash if present
-          const blobPath = imageUrl.startsWith('/') ? imageUrl.substring(1) : imageUrl;
-          await del(blobPath);
-        }
-        
-        console.log("Successfully deleted image from Vercel Blob");
-        return true;
-      } else {
-        // For local filesystem
-        // imageUrl format: /profile-images/{filename}
-        // Need to map this to the physical path: uploads/profile-images/{filename}
-        
-        // Convert URL path to filesystem path
-        const imagePath = join(process.cwd(), 'uploads', imageUrl.substring(1));
-        console.log("Attempting to delete image at:", imagePath);
-        
-        if (existsSync(imagePath)) {
-          unlinkSync(imagePath);
-          console.log("Successfully deleted image");
-          return true;
-        }
-        console.log("Image file not found");
-        return false;
-      }
-    } catch (error) {
-      console.error(`Failed to delete image: ${error.message}`);
-      return false;
-    }
+  } catch (error) {
+    console.error(`Failed to save profile image: ${error.message}`);
+    throw error;
   }
 }
+
+/**
+ * Saves a property image to either local filesystem or Vercel Blob Storage
+ * @param file The uploaded file
+ * @param propertyId The property ID to associate with the image
+ * @returns Promise<string> The URL or path to the saved image
+ */
+async savePropertyImage(file: Express.Multer.File, propertyId: string): Promise<string> {
+  try {
+    if (!file) {
+      throw new Error('No file provided');
+    }
+
+    console.log(`Saving property image for property ${propertyId}`);
+
+    if (this.isVercel) {
+      // For Vercel Blob Storage
+      console.log("Saving to Vercel Blob Storage");
+      
+      // Generate a unique filename
+      const fileExtension = path.extname(file.originalname);
+      const uniqueFilename = `${uuidv4()}${fileExtension}`;
+      
+      // Define the blob path
+      const blobPath = `property-images/${propertyId}/${uniqueFilename}`;
+      
+      // Upload to Vercel Blob
+      const blob = await put(blobPath, file.buffer, {
+        access: 'public',
+        contentType: file.mimetype
+      });
+      
+      console.log(`Successfully uploaded to Vercel Blob: ${blob.url}`);
+      return blob.url;
+    } else {
+      // For local filesystem
+      console.log("Saving to local filesystem");
+      
+      // Ensure the directory exists
+      const uploadDir = join(process.cwd(), 'uploads', 'property-images', propertyId);
+      if (!existsSync(uploadDir)) {
+        mkdirSync(uploadDir, { recursive: true });
+      }
+      
+      // Generate a unique filename
+      const fileExtension = path.extname(file.originalname);
+      const uniqueFilename = `${uuidv4()}${fileExtension}`;
+      const filePath = join(uploadDir, uniqueFilename);
+      
+      // Write the file
+      return new Promise((resolve, reject) => {
+        const writeStream = createWriteStream(filePath);
+        writeStream.write(file.buffer);
+        writeStream.end();
+        
+        writeStream.on('finish', () => {
+          console.log(`Successfully saved file to: ${filePath}`);
+          // Return a URL-like path that can be used in the application
+          const relativePath = `property-images/${propertyId}/${uniqueFilename}`;
+          resolve(relativePath);
+        });
+        
+        writeStream.on('error', (error) => {
+          console.error(`Error saving file: ${error.message}`);
+          reject(error);
+        });
+      });
+    }
+  } catch (error) {
+    console.error(`Failed to save property image: ${error.message}`);
+    throw error;
+  }
+}
+
+/**
+ * Deletes a property image from either local filesystem or Vercel Blob Storage
+ * @param imageUrl The URL or path of the image to delete
+ * @returns Promise<boolean> indicating success or failure
+ */
+async deletePropertyImage(imageUrl: string): Promise<boolean> {
+  try {
+    if (!imageUrl) {
+      console.warn('Received empty image URL for deletion');
+      return false;
+    }
+
+    console.log(`Attempting to delete property image: ${imageUrl}`);
+
+    if (this.isVercel) {
+      // For Vercel Blob Storage
+      console.log("Deleting from Vercel Blob Storage");
+      
+      // Check if it's a full URL or just a path
+      if (imageUrl.startsWith('http')) {
+        // Extract the blob path from the URL
+        // Example: https://viahfpn0v0vwvach.public.blob.vercel-storage.com/property-images/67f3f43cbed5143aee1fc38e/image.jpg
+        
+        try {
+          // First try: Extract path after .com/
+          const pathMatch = imageUrl.match(/\.com\/(.+)$/);
+          if (pathMatch && pathMatch[1]) {
+            const blobPath = pathMatch[1];
+            console.log(`Extracted blob path: ${blobPath}`);
+            
+            try {
+              await del(blobPath);
+              console.log(`Successfully deleted blob at path: ${blobPath}`);
+              return true;
+            } catch (error) {
+              console.log(`Failed with path extraction, trying full URL: ${error.message}`);
+              // Fall through to try the full URL
+            }
+          }
+          
+          // Second try: Use the full URL directly
+          await del(imageUrl);
+          console.log(`Successfully deleted blob using full URL`);
+          return true;
+        } catch (error) {
+          console.error(`Failed to delete from Vercel Blob: ${error.message}`);
+          return false;
+        }
+      } else {
+        // It's already a path, use it directly
+        try {
+          const blobPath = imageUrl.startsWith('/') ? imageUrl.substring(1) : imageUrl;
+          await del(blobPath);
+          console.log(`Successfully deleted blob at path: ${blobPath}`);
+          return true;
+        } catch (error) {
+          console.error(`Failed to delete from Vercel Blob: ${error.message}`);
+          return false;
+        }
+      }
+    } else {
+      // For local filesystem
+      let localPath = imageUrl;
+      
+      // Handle full URLs (in case they're passed in local development)
+      if (localPath.startsWith('http')) {
+        const urlObj = new URL(localPath);
+        localPath = urlObj.pathname;
+      }
+      
+      // Remove leading slash if present
+      if (localPath.startsWith('/')) {
+        localPath = localPath.substring(1);
+      }
+      
+      // Handle different path formats
+      if (!localPath.startsWith('uploads/')) {
+        if (localPath.startsWith('property-images/')) {
+          localPath = `uploads/${localPath}`;
+        } else {
+          localPath = `uploads/property-images/${localPath}`;
+        }
+      }
+      
+      const fullPath = join(process.cwd(), localPath);
+      console.log(`Attempting to delete local file: ${fullPath}`);
+      
+      if (existsSync(fullPath)) {
+        unlinkSync(fullPath);
+        console.log(`Successfully deleted local file: ${fullPath}`);
+        return true;
+      } else {
+        console.log(`File not found at path: ${fullPath}, trying alternative paths`);
+        
+        // Try alternative paths
+        const alternativePaths = [
+          join(process.cwd(), 'uploads', localPath),
+          join(process.cwd(), localPath),
+          join(process.cwd(), 'uploads', 'property-images', localPath.split('/').pop() || '')
+        ];
+        
+        for (const path of alternativePaths) {
+          console.log(`Trying alternative path: ${path}`);
+          if (existsSync(path)) {
+            unlinkSync(path);
+            console.log(`Successfully deleted local file: ${path}`);
+            return true;
+          }
+        }
+        
+        console.log(`File not found after trying all alternative paths`);
+        return false;
+      }
+    }
+  } catch (error) {
+    console.error(`Failed to delete property image: ${error.message}`);
+    return false;
+  }
+}
+
+/**
+ * Deletes a profile image from either local filesystem or Vercel Blob Storage
+ * @param imageUrl The URL or path of the image to delete
+ * @returns Promise<boolean> indicating success or failure
+ */
+async deleteProfileImage(imageUrl: string): Promise<boolean> {
+  try {
+    if (!imageUrl) {
+      console.warn('Received empty image URL for deletion');
+      return false;
+    }
+
+    console.log(`Attempting to delete profile image: ${imageUrl}`);
+
+    if (this.isVercel) {
+      // For Vercel Blob Storage
+      console.log("Deleting from Vercel Blob Storage");
+      
+      // Check if it's a full URL or just a path
+      if (imageUrl.startsWith('http')) {
+        // Extract the blob path from the URL
+        // Example: https://viahfpn0v0vwvach.public.blob.vercel-storage.com/profile-images/67f3f43cbed5143aee1fc38e/avatar.jpg
+        
+        try {
+          // First try: Extract path after .com/
+          const pathMatch = imageUrl.match(/\.com\/(.+)$/);
+          if (pathMatch && pathMatch[1]) {
+            const blobPath = pathMatch[1];
+            console.log(`Extracted blob path: ${blobPath}`);
+            
+            try {
+              await del(blobPath);
+              console.log(`Successfully deleted blob at path: ${blobPath}`);
+              return true;
+            } catch (error) {
+              console.log(`Failed with path extraction, trying full URL: ${error.message}`);
+              // Fall through to try the full URL
+            }
+          }
+          
+          // Second try: Use the full URL directly
+          await del(imageUrl);
+          console.log(`Successfully deleted blob using full URL`);
+          return true;
+        } catch (error) {
+          console.error(`Failed to delete from Vercel Blob: ${error.message}`);
+          return false;
+        }
+      } else {
+        // It's already a path, use it directly
+        try {
+          const blobPath = imageUrl.startsWith('/') ? imageUrl.substring(1) : imageUrl;
+          await del(blobPath);
+          console.log(`Successfully deleted blob at path: ${blobPath}`);
+          return true;
+        } catch (error) {
+          console.error(`Failed to delete from Vercel Blob: ${error.message}`);
+          return false;
+        }
+      }
+    } else {
+      // For local filesystem
+      let localPath = imageUrl;
+      
+      // Handle full URLs (in case they're passed in local development)
+      if (localPath.startsWith('http')) {
+        const urlObj = new URL(localPath);
+        localPath = urlObj.pathname;
+      }
+      
+      // Remove leading slash if present
+      if (localPath.startsWith('/')) {
+        localPath = localPath.substring(1);
+      }
+      
+      // Handle different path formats
+      if (!localPath.startsWith('uploads/')) {
+        if (localPath.startsWith('profile-images/')) {
+          localPath = `uploads/${localPath}`;
+        } else {
+          localPath = `uploads/profile-images/${localPath}`;
+        }
+      }
+      
+      const fullPath = join(process.cwd(), localPath);
+      console.log(`Attempting to delete local file: ${fullPath}`);
+      
+      if (existsSync(fullPath)) {
+        unlinkSync(fullPath);
+        console.log(`Successfully deleted local file: ${fullPath}`);
+        return true;
+      } else {
+        console.log(`File not found at path: ${fullPath}, trying alternative paths`);
+        
+        // Try alternative paths
+        const alternativePaths = [
+          join(process.cwd(), 'uploads', localPath),
+          join(process.cwd(), localPath),
+          join(process.cwd(), 'uploads', 'profile-images', localPath.split('/').pop() || '')
+        ];
+        
+        for (const path of alternativePaths) {
+          console.log(`Trying alternative path: ${path}`);
+          if (existsSync(path)) {
+            unlinkSync(path);
+            console.log(`Successfully deleted local file: ${path}`);
+            return true;
+          }
+        }
+        
+        console.log(`File not found after trying all alternative paths`);
+        return false;
+      }
+    }
+  } catch (error) {
+    console.error(`Failed to delete profile image: ${error.message}`);
+    return false;
+  }
+}
+}
+function uuidv4() {
+  throw new Error('Function not implemented.');
+}
+

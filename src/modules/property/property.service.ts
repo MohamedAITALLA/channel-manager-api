@@ -329,66 +329,48 @@ export class PropertyService {
         deleteImages: string[]=[],
     ): Promise<any> {
         try {
-            // Find the property first to get the original state
-            const originalProperty = await this.propertyModel.findOne({ _id: id, user_id: userId }).exec();
+           // Find the property first to get the original state
+        const originalProperty = await this.propertyModel.findOne({ _id: id, user_id: userId }).exec();
 
-            if (!originalProperty) {
-                return {
-                    success: false,
-                    error: 'Property not found',
-                    details: {
-                        property_id: id,
-                        user_id: userId
-                    },
-                    timestamp: new Date().toISOString()
-                };
-            }
+        if (!originalProperty) {
+            return {
+                success: false,
+                error: 'Property not found',
+                details: {
+                    property_id: id,
+                    user_id: userId
+                },
+                timestamp: new Date().toISOString()
+            };
+        }
 
-            // Track which fields are being updated
-            const updatedFields = Object.keys(updatePropertyDto).filter(
-                key => JSON.stringify(originalProperty[key]) !== JSON.stringify(updatePropertyDto[key])
-            );
+        // Track which fields are being updated
+        const updatedFields = Object.keys(updatePropertyDto).filter(
+            key => JSON.stringify(originalProperty[key]) !== JSON.stringify(updatePropertyDto[key])
+        );
 
-            // Handle image deletions if specified
-            if (deleteImages && deleteImages.length > 0) {
-                // Filter out the images to be deleted
-                originalProperty.images = originalProperty.images.filter(url => !deleteImages.includes(url));
-                updatedFields.push('images');
+        // Handle image deletions if specified
+        if (deleteImages && deleteImages.length > 0) {
+            // Filter out the images to be deleted
+            originalProperty.images = originalProperty.images.filter(url => !deleteImages.includes(url));
+            updatedFields.push('images');
 
-                // Delete the actual files from the file system
-                deleteImages.forEach(imageUrl => {
-                    try {
-                        if (!imageUrl) {
-                            console.warn('Skipping undefined image URL');
-                            return;
-                        }
-
-                        // Normalize path handling based on how imageUrl is stored
-                        let imagePath;
-                        if (imageUrl.startsWith('/uploads/')) {
-                            // If URL starts with /uploads/, remove the leading slash
-                            imagePath = join(process.cwd(), imageUrl.substring(1));
-                        } else if (imageUrl.startsWith('uploads/')) {
-                            // If URL starts with uploads/ (no leading slash)
-                            imagePath = join(process.cwd(), imageUrl);
-                        } else {
-                            // If URL is just the filename or another format
-                            imagePath = join(process.cwd(), 'uploads', imageUrl);
-                        }
-
-                        console.log(`Attempting to delete file: ${imagePath}`);
-
-                        if (existsSync(imagePath)) {
-                            unlinkSync(imagePath);
-                            console.log(`Successfully deleted file: ${imagePath}`);
-                        } else {
-                            console.warn(`File not found: ${imagePath}`);
-                        }
-                    } catch (err) {
-                        console.error(`Failed to delete image file: ${err.message}`);
+            // Delete the actual files using the uploadService
+            for (const imageUrl of deleteImages) {
+                try {
+                    if (!imageUrl) {
+                        console.warn('Skipping undefined image URL');
+                        continue;
                     }
-                });
+                    // Use the uploadService to delete the image
+                    // This will handle both local files and Vercel Blob storage
+                    await this.uploadService.deletePropertyImage(imageUrl);
+                    console.log(`Successfully requested deletion for: ${imageUrl}`);
+                } catch (err) {
+                    console.error(`Failed to delete image: ${err.message}`);
+                }
             }
+        }
 
 
 
