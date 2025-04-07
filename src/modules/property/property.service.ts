@@ -348,7 +348,7 @@ export class PropertyService {
         const updatedFields = Object.keys(updatePropertyDto).filter(
             key => JSON.stringify(originalProperty[key]) !== JSON.stringify(updatePropertyDto[key])
         );
-        this.logger.debug(`PREPARING FOR IMAGE DELETION`);
+        this.logger.debug(`PREPARING FOR IMAGE DELETION : ${JSON.stringify(deleteImages)} / COUNT : ${deleteImages.length} `);
         // Handle image deletions if specified
         if (deleteImages && deleteImages.length > 0) {
             this.logger.debug(`IMAGES TO DELETE: ${JSON.stringify(deleteImages)}`);
