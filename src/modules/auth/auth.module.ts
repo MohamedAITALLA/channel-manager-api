@@ -1,6 +1,6 @@
 // src/modules/auth/auth.module.ts
-import { Module } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
+import { Module, forwardRef } from '@nestjs/common';
+import { MongooseModule, getModelToken } from '@nestjs/mongoose';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -13,6 +13,8 @@ import { UserProfile, UserProfileSchema } from '../user-profile/schemas/user-pro
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { AdminGuard } from './guards/admin.guard';
 import { EmailModule } from '../email/email.module';
+import { UserProfileModule } from '../user-profile/user-profile.module';
+import { Model } from 'mongoose';
 
 @Module({
   imports: [
@@ -27,12 +29,28 @@ import { EmailModule } from '../email/email.module';
     }),
     MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
-      { name: UserProfile.name, schema: UserProfileSchema },
     ]),
+    forwardRef(() => UserProfileModule),
     EmailModule,
   ],
   controllers: [AuthController, AdminController],
-  providers: [AuthService, AdminService, JwtStrategy, AdminGuard],
-  exports: [AuthService, AdminService, JwtStrategy, AdminGuard],
+  providers: [
+    AuthService, 
+    AdminService, 
+    JwtStrategy, 
+    AdminGuard,
+    {
+      provide: User,
+      useFactory: (userModel: Model<User>) => userModel,
+      inject: [getModelToken(User.name)],
+    },
+  ],
+  exports: [
+    AuthService, 
+    AdminService, 
+    JwtStrategy, 
+    AdminGuard,
+    User,
+  ],
 })
 export class AuthModule {}

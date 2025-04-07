@@ -1,5 +1,5 @@
 // src/modules/auth/admin.service.ts
-import { Injectable, NotFoundException, ConflictException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, ForbiddenException, Inject, forwardRef } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import * as bcrypt from 'bcrypt';
@@ -12,7 +12,8 @@ import { UpdateUserDto } from './dto/update-user.dto';
 export class AdminService {
   constructor(
     @InjectModel(User.name) private userModel: Model<User>,
-    @InjectModel(UserProfile.name) private userProfileModel: Model<UserProfile>,
+    @Inject(forwardRef(() => UserProfile))
+    private userProfileModel: Model<UserProfile>,
   ) { }
 
   async getAllUsers(adminId: string, page: number = 1, limit: number = 10, search?: string) {

@@ -1,5 +1,5 @@
 // src/modules/ical/admin-ical-connection.service.ts
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { forwardRef, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { ICalConnection } from './schemas/ical-connection.schema';
@@ -9,6 +9,7 @@ import { AuditService } from '../audit/audit.service';
 export class AdminICalConnectionService {
   constructor(
     @InjectModel(ICalConnection.name) private icalConnectionModel: Model<ICalConnection>,
+    @Inject(forwardRef(() => AuditService))
     private readonly auditService: AuditService,
   ) {}
 

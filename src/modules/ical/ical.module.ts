@@ -1,5 +1,5 @@
-import { Module } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
+import { Module, forwardRef } from '@nestjs/common';
+import { getModelToken, MongooseModule } from '@nestjs/mongoose';
 import { HttpModule } from '@nestjs/axios';
 import { ICalConnectionController } from './ical-connection.controller';
 import { ICalConnectionService } from './ical-connection.service';
@@ -10,7 +10,10 @@ import { AdminICalConnectionService } from './admin-ical-connection.service';
 import { ICalConnection, ICalConnectionSchema } from './schemas/ical-connection.schema';
 import { CalendarModule } from '../calendar/calendar.module';
 import { AuditService } from '../audit/audit.service';
-
+import { Model } from 'mongoose';
+import { AuditModule } from '../audit/audit.module';
+import { NotificationModule } from '../notification/notification.module';
+import { AuthModule } from '../auth/auth.module';
 @Module({
   imports: [
     HttpModule.register({
@@ -20,11 +23,24 @@ import { AuditService } from '../audit/audit.service';
     MongooseModule.forFeature([
       { name: ICalConnection.name, schema: ICalConnectionSchema },
     ]),
-    // Import CalendarModule to access CalendarService
-    CalendarModule,
+    // Use forwardRef to handle circular dependency with CalendarModule
+    forwardRef(() => CalendarModule),
+    forwardRef(() => AuditModule),
+    forwardRef(() => NotificationModule),
+    forwardRef(() => AuthModule),
   ],
   controllers: [ICalConnectionController, IcalFeedController, AdminICalConnectionController],
-  providers: [ICalConnectionService, IcalService, AdminICalConnectionService, AuditService],
-  exports: [ICalConnectionService, IcalService, AdminICalConnectionService],
+  providers: [
+    ICalConnectionService, 
+    IcalService, 
+    AdminICalConnectionService, 
+    // Remove AuditService from here
+    {
+      provide: ICalConnection,
+      useFactory: (icalConnectionModel: Model<ICalConnection>) => icalConnectionModel,
+      inject: [getModelToken(ICalConnection.name)],
+    },
+  ],
+  exports: [ICalConnectionService, IcalService, AdminICalConnectionService, ICalConnection],
 })
 export class IcalModule {}

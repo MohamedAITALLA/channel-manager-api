@@ -1,5 +1,5 @@
 // src/modules/auth/guards/admin.guard.ts
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+import { Injectable, CanActivate, ExecutionContext, ForbiddenException, Inject } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { User } from '../schemas/user.schema';
@@ -7,7 +7,7 @@ import { User } from '../schemas/user.schema';
 @Injectable()
 export class AdminGuard implements CanActivate {
   constructor(
-    @InjectModel(User.name) private userModel: Model<User>,
+    @Inject(User) private userModel: Model<User>,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {

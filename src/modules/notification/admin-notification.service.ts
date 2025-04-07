@@ -1,5 +1,5 @@
 // src/modules/notification/admin-notification.service.ts
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { forwardRef, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Notification } from './schemas/notification.schema';
@@ -9,6 +9,7 @@ import { AuditService } from '../audit/audit.service';
 export class AdminNotificationService {
   constructor(
     @InjectModel(Notification.name) private notificationModel: Model<Notification>,
+    @Inject(forwardRef(() => AuditService))
     private readonly auditService: AuditService,
   ) {}
 

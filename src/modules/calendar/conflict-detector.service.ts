@@ -1,17 +1,19 @@
-import { Injectable } from '@nestjs/common';
+import { forwardRef, Inject, Injectable } from '@nestjs/common';
 import { getModelToken, InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { CalendarEvent } from './schemas/calendar-event.schema';
 import { Conflict } from './schemas/conflict.schema';
 import { ConflictType, ConflictSeverity, ConflictStatus, EventStatus } from '../../common/types';
 import { ModuleRef } from '@nestjs/core';
+import { AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class ConflictDetectorService {
   constructor(
     @InjectModel(CalendarEvent.name) private calendarEventModel: Model<CalendarEvent>,
     @InjectModel(Conflict.name) private conflictModel: Model<Conflict>,
-    private readonly moduleRef: ModuleRef
+    @Inject(forwardRef(() => AuditService))
+    private readonly auditService: AuditService,
   ) {}
 
 
@@ -265,11 +267,10 @@ async detectConflictsForEvent(event: CalendarEvent): Promise<any> {
 async cleanupConflictsAfterConnectionRemoval(propertyId: string, connectionId: string, affectedEventIds?: any[]): Promise<any> {
   try {
     // Get all events associated with this connection if not provided
-    const calendarEventModel = this.moduleRef.get(getModelToken(CalendarEvent.name), { strict: false });
     let eventIds = affectedEventIds || [];
     
     if (!eventIds || eventIds.length === 0) {
-      const eventsFromConnection = await calendarEventModel.find({
+      const eventsFromConnection = await this.calendarEventModel.find({
         property_id: propertyId,
         connection_id: connectionId,
         is_active: true
@@ -338,7 +339,7 @@ async cleanupConflictsAfterConnectionRemoval(propertyId: string, connectionId: s
         resolvedCount++;
       } else {
         // Recalculate the conflict with remaining events
-        const remainingEvents = await calendarEventModel.find({
+        const remainingEvents = await this.calendarEventModel.find({
           _id: { $in: otherEventIds },
           is_active: true,
           status: { $ne: EventStatus.CANCELLED }

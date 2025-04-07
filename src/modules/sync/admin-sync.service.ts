@@ -1,5 +1,5 @@
 // src/modules/sync/admin-sync.service.ts
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { forwardRef, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { ICalConnection } from '../ical/schemas/ical-connection.schema';
@@ -12,9 +12,10 @@ import { SyncResult, PropertySyncResult } from './types';
 @Injectable()
 export class AdminSyncService {
   constructor(
-    @InjectModel(ICalConnection.name) private icalConnectionModel: Model<ICalConnection>,
-    @InjectModel(CalendarEvent.name) private calendarEventModel: Model<CalendarEvent>,
+    @Inject(forwardRef(() => ICalConnection)) private icalConnectionModel: Model<ICalConnection>,
+    @Inject(forwardRef(() => CalendarEvent)) private calendarEventModel: Model<CalendarEvent>,
     private readonly syncService: SyncService,
+    @Inject(forwardRef(() => AuditService))
     private readonly auditService: AuditService,
   ) {}
 

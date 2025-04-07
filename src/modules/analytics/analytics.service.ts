@@ -1,5 +1,5 @@
 // src/modules/analytics/analytics.service.ts
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Property } from '../property/schemas/property.schema';
@@ -12,11 +12,11 @@ import { EventType, Platform, EventStatus, ConnectionStatus } from '../../common
 @Injectable()
 export class AnalyticsService {
   constructor(
-    @InjectModel(Property.name) private propertyModel: Model<Property>,
-    @InjectModel(CalendarEvent.name) private calendarEventModel: Model<CalendarEvent>,
-    @InjectModel(ICalConnection.name) private icalConnectionModel: Model<ICalConnection>,
-    @InjectModel(User.name) private userModel: Model<User>,
-    @InjectModel(Conflict.name) private conflictModel: Model<Conflict>,
+    @Inject(forwardRef(() => Property)) private propertyModel: Model<Property>,
+    @Inject(forwardRef(() => CalendarEvent))  private calendarEventModel: Model<CalendarEvent>,
+    @Inject(forwardRef(() => ICalConnection))  private icalConnectionModel: Model<ICalConnection>,
+    @Inject(forwardRef(() => User))  private userModel: Model<User>,
+    @Inject(forwardRef(() => Conflict))  private conflictModel: Model<Conflict>,
   ) {}
 
   // Property Analytics

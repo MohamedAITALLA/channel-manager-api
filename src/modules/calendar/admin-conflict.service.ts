@@ -1,5 +1,5 @@
 // src/modules/calendar/admin-conflict.service.ts
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { forwardRef, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Conflict } from './schemas/conflict.schema';
@@ -9,6 +9,7 @@ import { AuditService } from '../audit/audit.service';
 export class AdminConflictService {
   constructor(
     @InjectModel(Conflict.name) private conflictModel: Model<Conflict>,
+    @Inject(forwardRef(() => AuditService))
     private readonly auditService: AuditService,
   ) {}
 

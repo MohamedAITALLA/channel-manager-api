@@ -1,5 +1,5 @@
 // src/modules/analytics/admin-analytics.service.ts
-import { Injectable } from '@nestjs/common';
+import { forwardRef, Inject, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Property } from '../property/schemas/property.schema';
@@ -12,11 +12,12 @@ import { AuditService } from '../audit/audit.service';
 @Injectable()
 export class AdminAnalyticsService {
   constructor(
-    @InjectModel(Property.name) private propertyModel: Model<Property>,
-    @InjectModel(CalendarEvent.name) private calendarEventModel: Model<CalendarEvent>,
-    @InjectModel(ICalConnection.name) private icalConnectionModel: Model<ICalConnection>,
-    @InjectModel(User.name) private userModel: Model<User>,
-    @InjectModel(Conflict.name) private conflictModel: Model<Conflict>,
+    @Inject(Property) private propertyModel: Model<Property>,
+    @Inject(CalendarEvent) private calendarEventModel: Model<CalendarEvent>,
+    @Inject(ICalConnection) private icalConnectionModel: Model<ICalConnection>,
+    @Inject(User) private userModel: Model<User>,
+    @Inject(Conflict) private conflictModel: Model<Conflict>,
+    @Inject(forwardRef(() => AuditService))
     private readonly auditService: AuditService,
   ) {}
 

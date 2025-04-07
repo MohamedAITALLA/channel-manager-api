@@ -1,5 +1,5 @@
 // src/modules/property/admin-property.service.ts
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { forwardRef, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Property } from './schemas/property.schema';
@@ -9,6 +9,7 @@ import { AuditService } from '../audit/audit.service';
 export class AdminPropertyService {
   constructor(
     @InjectModel(Property.name) private propertyModel: Model<Property>,
+    @Inject(forwardRef(() => AuditService))
     private readonly auditService: AuditService,
   ) {}
 

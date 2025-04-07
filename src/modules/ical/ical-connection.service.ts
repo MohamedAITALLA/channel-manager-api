@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, forwardRef, Inject } from '@nestjs/common';
 import { getModelToken, InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { ICalConnection } from './schemas/ical-connection.schema';
@@ -16,7 +16,11 @@ export class ICalConnectionService {
   constructor(
     @InjectModel(ICalConnection.name) private icalConnectionModel: Model<ICalConnection>,
     private readonly icalService: IcalService,
-    private readonly moduleRef: ModuleRef
+    @Inject(forwardRef(() => ConflictDetectorService)) private readonly conflictDetectorService: ConflictDetectorService,
+    @Inject(forwardRef(() => CalendarEvent)) private readonly calendarEventModel: Model<CalendarEvent>,
+    @Inject(forwardRef(() => NotificationService)) private readonly notificationService:NotificationService,
+
+
   ) { }
 
   async create(
@@ -239,8 +243,7 @@ export class ICalConnectionService {
     );
 
     // Clean up conflicts using the affected event IDs
-    const conflictDetectorService = this.moduleRef.get(ConflictDetectorService, { strict: false });
-    const conflictsResult = await conflictDetectorService.cleanupConflictsAfterConnectionRemoval(
+    const conflictsResult = await this.conflictDetectorService.cleanupConflictsAfterConnectionRemoval(
       propertyId,
       connectionId,
       eventsResult.data.affected_event_ids || []
@@ -303,7 +306,6 @@ export class ICalConnectionService {
     preserveHistory: boolean
   ): Promise<{ success: boolean; data: { count: number; affected_events?: any[]; affected_event_ids?: any[] }; message: string; timestamp: string }> {
     // Inject CalendarEvent model
-    const calendarEventModel = this.moduleRef.get(getModelToken(CalendarEvent.name), { strict: false });
 
     // Find all events associated with this connection
     const query = {
@@ -313,7 +315,7 @@ export class ICalConnectionService {
     };
 
     // Get the actual events for more detailed processing
-    const events = await calendarEventModel.find(query).exec();
+    const events = await this.calendarEventModel.find(query).exec();
     const eventsCount = events.length;
 
     if (eventsCount === 0) {
@@ -345,7 +347,7 @@ export class ICalConnectionService {
       case 'delete':
         if (preserveHistory) {
           // Soft delete - mark as inactive and update status to cancelled
-          await calendarEventModel.updateMany(
+          await this.calendarEventModel.updateMany(
             query,
             { 
               is_active: false, 
@@ -356,14 +358,14 @@ export class ICalConnectionService {
           message = `${eventsCount} associated events have been deactivated and marked as cancelled.`;
         } else {
           // Hard delete
-          await calendarEventModel.deleteMany(query).exec();
+          await this.calendarEventModel.deleteMany(query).exec();
           message = `${eventsCount} associated events have been permanently deleted.`;
         }
         break;
 
       case 'deactivate':
         // Mark as inactive and update status to cancelled
-        await calendarEventModel.updateMany(
+        await this.calendarEventModel.updateMany(
           query,
           { 
             is_active: false, 
@@ -376,7 +378,7 @@ export class ICalConnectionService {
 
       case 'convert':
         // Convert to manual events by removing connection_id and setting platform to 'manual'
-        await calendarEventModel.updateMany(
+        await this.calendarEventModel.updateMany(
           query,
           {
             connection_id: null,
@@ -488,11 +490,9 @@ export class ICalConnectionService {
     eventAction: string
   ): Promise<void> {
     try {
-      // Inject the notification service
-      const notificationService = this.moduleRef.get(NotificationService, { strict: false });
-
+      
       // Create a notification about the connection removal
-      await notificationService.createNotification({
+      await this.notificationService.createNotification({
         property_id: propertyId,
         user_id: connection.user_id.toString(),
         type: NotificationType.ICAL_REMOVED,

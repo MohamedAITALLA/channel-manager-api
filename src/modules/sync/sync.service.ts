@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Schema, Types } from 'mongoose';
 import { Cron, CronExpression } from '@nestjs/schedule';
@@ -13,10 +13,13 @@ import { SyncResult, PropertySyncResult, CalendarEventData } from './types';
 @Injectable()
 export class SyncService {
     constructor(
-        @InjectModel(ICalConnection.name) private icalConnectionModel: Model<ICalConnection>,
-        @InjectModel(CalendarEvent.name) private calendarEventModel: Model<CalendarEvent>,
+        @Inject(forwardRef(() => ICalConnection)) private icalConnectionModel: Model<ICalConnection>,
+        @Inject(forwardRef(() => CalendarEvent)) private calendarEventModel: Model<CalendarEvent>,
+        @Inject(forwardRef(() => IcalService))
         private readonly icalService: IcalService,
+        @Inject(forwardRef(() => ConflictDetectorService))
         private readonly conflictDetectorService: ConflictDetectorService,
+        @Inject(forwardRef(() => NotificationService))
         private readonly notificationService: NotificationService,
     ) { }
 

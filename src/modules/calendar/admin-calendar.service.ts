@@ -1,5 +1,5 @@
 // src/modules/calendar/admin-calendar.service.ts
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { forwardRef, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { CalendarEvent } from './schemas/calendar-event.schema';
@@ -9,6 +9,7 @@ import { AuditService } from '../audit/audit.service';
 export class AdminCalendarService {
   constructor(
     @InjectModel(CalendarEvent.name) private calendarEventModel: Model<CalendarEvent>,
+    @Inject(forwardRef(() => AuditService))
     private readonly auditService: AuditService,
   ) {}
 

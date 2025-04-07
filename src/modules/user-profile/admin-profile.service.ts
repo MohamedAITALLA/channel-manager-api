@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { UserProfile } from './schemas/user-profile.schema';
@@ -10,7 +10,8 @@ import { UploadService } from 'src/common/services/upload.service';
 export class AdminProfileService {
     constructor(
         @InjectModel(UserProfile.name) private userProfileModel: Model<UserProfile>,
-        @InjectModel(User.name) private userModel: Model<User>,
+        @Inject(forwardRef(() => User))
+        private userModel: Model<User>,
         private readonly uploadService: UploadService,
     ) { }
 
