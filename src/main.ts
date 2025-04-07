@@ -19,10 +19,14 @@ async function bootstrap() {
   // Configure CORS
   app.enableCors();
 
-  // Serve static files
-  app.use('/property-images', express.static(join(process.cwd(), 'uploads', 'property-images')));
-  app.use('/profile-images', express.static(join(process.cwd(), 'uploads', 'profile-images')));
-
+  // Check if running in Vercel
+  const isVercel = process.env.VERCEL === '1';
+  
+  // Serve static files only in local development
+  if (!isVercel) {
+    app.use('/property-images', express.static(join(process.cwd(), 'uploads', 'property-images')));
+    app.use('/profile-images', express.static(join(process.cwd(), 'uploads', 'profile-images')));
+  }
 
   // Configure Swagger
   const config = new DocumentBuilder()

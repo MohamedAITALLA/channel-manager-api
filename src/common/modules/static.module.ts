@@ -4,10 +4,16 @@ import { join } from 'path';
 
 @Module({
   imports: [
-    ServeStaticModule.forRoot({
-      rootPath: join(process.cwd(), 'uploads'),
-      serveRoot: '/uploads',
-    }),
+    // Only serve static files in local development
+    ...(process.env.VERCEL === '1' 
+      ? [] 
+      : [
+          ServeStaticModule.forRoot({
+            rootPath: join(process.cwd(), 'uploads'),
+            serveRoot: '/uploads',
+          }),
+        ]
+    ),
   ],
 })
 export class StaticModule {}
