@@ -348,9 +348,10 @@ export class PropertyService {
         const updatedFields = Object.keys(updatePropertyDto).filter(
             key => JSON.stringify(originalProperty[key]) !== JSON.stringify(updatePropertyDto[key])
         );
-
+        this.logger.debug(`PREPARING FOR IMAGE DELETION`);
         // Handle image deletions if specified
         if (deleteImages && deleteImages.length > 0) {
+            this.logger.debug(`IMAGES TO DELETE: ${JSON.stringify(deleteImages)}`);
             // Filter out the images to be deleted
             originalProperty.images = originalProperty.images.filter(url => !deleteImages.includes(url));
             updatedFields.push('images');
@@ -360,11 +361,13 @@ export class PropertyService {
                 try {
                     if (!imageUrl) {
                         console.warn('Skipping undefined image URL');
+                        this.logger.debug(`SKIPPING UNDEFINED URL: ${JSON.stringify(imageUrl)}`);
                         continue;
                     }
                     // Use the uploadService to delete the image
                     // This will handle both local files and Vercel Blob storage
                     await this.uploadService.deletePropertyImage(imageUrl);
+                    this.logger.debug(`SUCCESSUFEL DELELTED IMAGE: ${JSON.stringify(imageUrl)}`);
                     console.log(`Successfully requested deletion for: ${imageUrl}`);
                 } catch (err) {
                     console.error(`Failed to delete image: ${err.message}`);
