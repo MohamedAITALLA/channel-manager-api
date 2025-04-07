@@ -445,7 +445,7 @@ export class AdminProfileService {
             // Delete profile image
             const deleted = this.uploadService.deleteProfileImage(profile.profile_image);
 
-            if (deleted) {
+            if (await deleted) {
                 // Update profile to remove image reference
                 profile.profile_image = null!;
                 await profile.save();
