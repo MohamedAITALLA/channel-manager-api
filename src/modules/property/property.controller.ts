@@ -438,20 +438,56 @@ import { memoryStorage } from 'multer';
         let deleteImages: string[] = [];
         
         if (deleteImagesString) {
-          this.logger.debug(` [CONTROLLER] INSIDE THE IF BLOCK: ${deleteImagesString}`);
+          this.logger.debug(` [CONTROLLER] PROCESSING DELETE IMAGES: ${deleteImagesString}`);
           try {
-            deleteImages = JSON.parse(deleteImagesString);
-            if (!Array.isArray(deleteImages)) {
-              this.logger.debug(` [CONTROLLER] IRESET TO EMPTY BLOCK: ${JSON.stringify(deleteImages)}`);
-              deleteImages = []; // Reset to empty array if not valid
+            // Try to parse the string
+            const parsedData = JSON.parse(deleteImagesString);
+            
+            // Check if it's already an array
+            if (Array.isArray(parsedData)) {
+              deleteImages = parsedData;
+              this.logger.debug(` [CONTROLLER] VALID ARRAY WITH ${deleteImages.length} ITEMS`);
+            } 
+            // Check if it's a string that needs to be parsed again (double-encoded JSON)
+            else if (typeof parsedData === 'string') {
+              try {
+                const reParsed = JSON.parse(parsedData);
+                if (Array.isArray(reParsed)) {
+                  deleteImages = reParsed;
+                  this.logger.debug(` [CONTROLLER] DOUBLE-ENCODED JSON ARRAY WITH ${deleteImages.length} ITEMS`);
+                }
+              } catch {
+                // If re-parsing fails, treat the original parsed data as a single URL
+                deleteImages = [parsedData];
+                this.logger.debug(` [CONTROLLER] TREATING AS SINGLE URL`);
+              }
+            }
+            // If it's neither an array nor a string that can be parsed as an array,
+            // but it's a string that looks like a URL, treat it as a single URL
+            else if (typeof parsedData === 'string' && parsedData.startsWith('http')) {
+              deleteImages = [parsedData];
+              this.logger.debug(` [CONTROLLER] TREATING AS SINGLE URL STRING`);
+            }
+            // Otherwise, keep it empty
+            else {
+              this.logger.debug(` [CONTROLLER] INVALID FORMAT, USING EMPTY ARRAY`);
+              deleteImages = [];
             }
           } catch (error) {
-            this.logger.debug(` [CONTROLLER] CATCH ERROR BLOCK: ${error.message}`);
-
-            // If parsing fails, just use empty array
-            deleteImages = [];
+            this.logger.debug(` [CONTROLLER] PARSE ERROR: ${error.message}`);
+            
+            // If parsing fails but the string looks like a URL, treat it as a single URL
+            if (deleteImagesString.includes('http') && deleteImagesString.includes('blob.vercel-storage.com')) {
+              // Try to clean up the string if it has extra quotes or escapes
+              const cleanedString = deleteImagesString.replace(/^"|"$/g, '').replace(/\\/g, '');
+              deleteImages = [cleanedString];
+              this.logger.debug(` [CONTROLLER] TREATING RAW STRING AS URL`);
+            } else {
+              deleteImages = [];
+            }
           }
         }
+        
         
         const userId = req.user.userId;
         return this.propertyService.update(id, updatePropertyDto, userId, images || [], deleteImages);
