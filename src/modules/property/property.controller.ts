@@ -12,6 +12,7 @@ import {
     UploadedFiles,
     UseInterceptors,
     BadRequestException,
+    Logger,
   } from '@nestjs/common';
   import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiConsumes, ApiBody } from '@nestjs/swagger';
   import { PropertyService } from './property.service';
@@ -28,7 +29,8 @@ import { memoryStorage } from 'multer';
   @Controller('properties')
   export class PropertyController {
     constructor(private readonly propertyService: PropertyService) {}
-  
+    private readonly logger = new Logger(PropertyController.name);
+
     @Get()
     @ApiOperation({ summary: 'Retrieve all properties with pagination, filtering, and sorting options' })
     @ApiQuery({ name: 'property_type', required: false })
@@ -430,7 +432,8 @@ import { memoryStorage } from 'multer';
       try {
         // Parse the property data from string to object
         const updatePropertyDto: UpdatePropertyDto = propertyString ? JSON.parse(propertyString) : {};
-        
+        this.logger.debug(` [CONTROLLER] IMAGES TO DELETE: ${deleteImagesString}`);
+
         // Parse the deleteImages array if provided, otherwise use empty array
         let deleteImages: string[] = [];
         
