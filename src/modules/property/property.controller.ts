@@ -438,12 +438,16 @@ import { memoryStorage } from 'multer';
         let deleteImages: string[] = [];
         
         if (deleteImagesString) {
+          this.logger.debug(` [CONTROLLER] INSIDE THE IF BLOCK: ${deleteImagesString}`);
           try {
             deleteImages = JSON.parse(deleteImagesString);
             if (!Array.isArray(deleteImages)) {
+              this.logger.debug(` [CONTROLLER] IRESET TO EMPTY BLOCK: ${deleteImagesString}`);
               deleteImages = []; // Reset to empty array if not valid
             }
           } catch (error) {
+            this.logger.debug(` [CONTROLLER] CATCH ERROR BLOCK: ${error.message}`);
+
             // If parsing fails, just use empty array
             deleteImages = [];
           }
