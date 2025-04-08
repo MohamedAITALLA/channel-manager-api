@@ -21,7 +21,9 @@ import {
   @UseGuards(JwtAuthGuard)
   @Controller('properties/:propertyId/ical-connections')
   export class ICalConnectionController {
-    constructor(private readonly icalConnectionService: ICalConnectionService) {}
+    constructor(
+      private readonly icalConnectionService: ICalConnectionService
+    ) {}
   
     @Get()
     @ApiOperation({ summary: 'List all iCal connections for a property' })
@@ -93,6 +95,17 @@ import {
       @Param('connectionId') connectionId: string,
     ) {
       return this.icalConnectionService.testConnection(propertyId, connectionId);
+    }
+
+    @Post(':connectionId/sync')
+    @ApiOperation({ summary: 'Sync a specific iCal connection' })
+    async syncConnection(
+      @Req() req: any,
+      @Param('propertyId') propertyId: string,
+      @Param('connectionId') connectionId: string,
+    ) {
+      const userId = req.user.userId;
+      return this.icalConnectionService.syncSingleConnection(propertyId, connectionId, userId);
     }
   }
   

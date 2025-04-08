@@ -10,6 +10,7 @@ import { CalendarEvent } from '../calendar/schemas/calendar-event.schema';
 import { NotificationService } from '../notification/notification.service';
 import { ConflictDetectorService } from '../calendar/conflict-detector.service';
 import { ModuleRef } from '@nestjs/core';
+import { SyncService } from '../sync/sync.service';
 
 @Injectable()
 export class ICalConnectionService {
@@ -18,9 +19,8 @@ export class ICalConnectionService {
     private readonly icalService: IcalService,
     @Inject(forwardRef(() => ConflictDetectorService)) private readonly conflictDetectorService: ConflictDetectorService,
     @Inject(forwardRef(() => CalendarEvent)) private readonly calendarEventModel: Model<CalendarEvent>,
-    @Inject(forwardRef(() => NotificationService)) private readonly notificationService:NotificationService,
-
-
+    @Inject(forwardRef(() => NotificationService)) private readonly notificationService: NotificationService,
+    @Inject(forwardRef(() => SyncService)) private readonly syncService: SyncService
   ) { }
 
   async create(
@@ -481,6 +481,75 @@ export class ICalConnectionService {
   }
 
   // src/modules/ical/ical-connection.service.ts
+
+  async syncSingleConnection(propertyId: string, connectionId: string, userId: string) {
+    try {
+      // Find the connection and verify it belongs to the property and user
+      const connection = await this.icalConnectionModel.findOne({
+        _id: connectionId,
+        property_id: propertyId,
+        user_id: userId,
+        is_active: true
+      }).exec();
+
+      if (!connection) {
+        throw new NotFoundException('iCal connection not found');
+      }
+
+      // Use the sync service to sync this specific connection
+      const syncResult = await this.syncService.syncConnection(connection);
+
+      // Update the connection with the latest sync information
+      await this.icalConnectionModel.findByIdAndUpdate(
+        connectionId,
+        {
+          last_synced: new Date(),
+          status: ConnectionStatus.ACTIVE,
+          error_message: null
+        }
+      ).exec();
+
+      return {
+        success: true,
+        data: {
+          property_id: propertyId,
+          connection_id: connectionId,
+          platform: connection.platform,
+          events_synced: syncResult.events_synced,
+          events_created: syncResult.events_created,
+          events_updated: syncResult.events_updated,
+          events_cancelled: syncResult.events_cancelled,
+          sync_duration_ms: syncResult.sync_duration_ms,
+          conflicts: syncResult.conflicts,
+          last_synced: new Date()
+        },
+        message: `Successfully synced ${connection.platform} calendar with ${syncResult.events_synced} events`,
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      // If there's an error, update the connection status
+      if (connectionId) {
+        await this.icalConnectionModel.findByIdAndUpdate(
+          connectionId,
+          {
+            status: ConnectionStatus.ERROR,
+            error_message: error.message,
+            last_error_time: new Date()
+          }
+        ).exec();
+      }
+
+      return {
+        success: false,
+        error: `Failed to sync iCal connection: ${error.message}`,
+        details: {
+          property_id: propertyId,
+          connection_id: connectionId,
+          timestamp: new Date().toISOString()
+        }
+      };
+    }
+  }
 
   private async notifyUserAboutConnectionRemoval(
     propertyId: string,

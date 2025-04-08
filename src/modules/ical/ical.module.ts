@@ -14,6 +14,8 @@ import { Model } from 'mongoose';
 import { AuditModule } from '../audit/audit.module';
 import { NotificationModule } from '../notification/notification.module';
 import { AuthModule } from '../auth/auth.module';
+import { SyncModule } from '../sync/sync.module';
+
 @Module({
   imports: [
     HttpModule.register({
@@ -28,6 +30,7 @@ import { AuthModule } from '../auth/auth.module';
     forwardRef(() => AuditModule),
     forwardRef(() => NotificationModule),
     forwardRef(() => AuthModule),
+    forwardRef(() => SyncModule),
   ],
   controllers: [ICalConnectionController, IcalFeedController, AdminICalConnectionController],
   providers: [

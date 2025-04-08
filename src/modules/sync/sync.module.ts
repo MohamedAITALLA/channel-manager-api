@@ -13,8 +13,9 @@ import { AuditModule } from '../audit/audit.module';
 
 @Module({
   imports: [
-    forwardRef(() => IcalModule),
+    MongooseModule.forFeature([{ name: ICalConnection.name, schema: ICalConnectionSchema }]),
     forwardRef(() => CalendarModule),
+    forwardRef(() => IcalModule),
     forwardRef(() => NotificationModule),
     forwardRef(() => AuditModule),
   ],
