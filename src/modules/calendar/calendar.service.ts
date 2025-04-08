@@ -584,7 +584,7 @@ async resolveConflict(
     // Get details of the remaining events for the response
     const remainingEvents = await this.calendarEventModel.find({
       _id: { $in: resolveConflictDto.eventsToKeep },
-      property_id: propertyId
+      property_id: propertyId, is_active: true
     }).exec();
 
     return {
@@ -648,7 +648,7 @@ async autoResolveConflict(
     // Get all events involved in the conflict
     const events = await this.calendarEventModel.find({
       _id: { $in: conflict.event_ids },
-      property_id: propertyId
+      property_id: propertyId, is_active: true
     }).exec();
 
     if (events.length < 2) {

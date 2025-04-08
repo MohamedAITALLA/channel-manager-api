@@ -351,12 +351,14 @@ export class SyncService {
             // Get event counts by platform
             const eventCounts = await Promise.all(connections.map(async connection => {
                 const total = await this.calendarEventModel.countDocuments({
-                    connection_id: connection._id
+                    connection_id: connection._id,
+                    is_active:true
                 });
                 const active = await this.calendarEventModel.countDocuments({
                     connection_id: connection._id,
                     status: { $ne: EventStatus.CANCELLED },
-                    end_date: { $gte: new Date() }
+                    end_date: { $gte: new Date() },
+                    is_active:true
                 });
                 return {
                     platform: connection.platform,
@@ -423,12 +425,14 @@ export class SyncService {
 
             // Get properties with connections
             const propertiesWithConnections = await this.icalConnectionModel.distinct('property_id', {
-                user_id: userId
+                user_id: userId,
+                is_active:true
             }).exec();
 
             // Get properties with errors
             const propertiesWithErrors = await this.icalConnectionModel.distinct('property_id', {
                 user_id: userId,
+                is_active: true,
                 status: ConnectionStatus.ERROR
             }).exec();
 
@@ -468,6 +472,7 @@ export class SyncService {
             const syncHistory = await this.icalConnectionModel.aggregate([
                 {
                     $match: {
+                        is_active: true,
                         user_id: new Types.ObjectId(userId),
                         last_synced: { $gte: sevenDaysAgo }
                     }
@@ -871,7 +876,7 @@ export class SyncService {
 
     private async getLastSystemSync(): Promise<Date | null> {
         const latestSync = await this.icalConnectionModel
-            .findOne({ last_synced: { $exists: true } })
+            .findOne({ last_synced: { $exists: true }, is_active:true })
             .sort({ last_synced: -1 })
             .exec();
 

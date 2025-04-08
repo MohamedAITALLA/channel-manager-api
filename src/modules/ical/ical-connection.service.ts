@@ -32,6 +32,8 @@ export class ICalConnectionService {
     const existingConnection = await this.icalConnectionModel.findOne({
       property_id: propertyId,
       platform: createICalConnectionDto.platform,
+      user_id: userId,
+      is_active: true
     });
 
     if (existingConnection) {
