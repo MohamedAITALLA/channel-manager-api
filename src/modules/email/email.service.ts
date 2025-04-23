@@ -26,7 +26,7 @@ export class EmailService {
     }
 
     async sendConfirmationEmail(email: string, token: string): Promise<boolean> {
-        const confirmationUrl = `https://preview--prop-harmony.lovable.app/confirm-email?token=${token}`;
+        const confirmationUrl = `https://prop-harmony.vercel.app/confirm-email?token=${token}`;
 
         try {
             await this.transporter.sendMail({
@@ -78,7 +78,7 @@ export class EmailService {
 
     // New methods for password reset functionality
     async sendPasswordResetEmail(email: string, resetToken: string): Promise<boolean> {
-        const resetUrl = `https://preview--prop-harmony.lovable.app/reset-password?token=${resetToken}`;
+        const resetUrl = `https://prop-harmony.vercel.app/reset-password?token=${resetToken}`;
         
         try {
             await this.transporter.sendMail({
